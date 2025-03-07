@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded-pill mx-auto mt-3">
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav mx-auto">
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/attack_summary">Attack Summary</a>
+                </li>
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/map">Map</a>
+                </li>
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/analysis">Analysis</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container mt-5">
+        <h1>Analysis</h1>
+        <div class="row">
+            <div class="col-md-6">
+                <canvas id="trendChart" class="mt-4"></canvas>
+            </div>
+            <div class="col-md-6">
+                <canvas id="serviceChart" class="mt-4"></canvas>
+            </div>
+        </div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Initialize charts
+        const trendCtx = document.getElementById('trendChart').getContext('2d');
+        const serviceCtx = document.getElementById('serviceChart').getContext('2d');
+        const trendChart = new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Attacks Over Time',
+                    data: [],
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#ffffff'
+                        }
+                    }
+                }
+            }
+        });
+        const serviceChart = new Chart(serviceCtx, {
+            type: 'bar',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Service Attacks',
+                    data: [],
+                    backgroundColor: 'rgba(153, 102, 255, 0.2)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#ffffff'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Fetch initial data
+        fetch('/data')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(attack => {
+                    updateCharts(attack);
+                });
+            });
+
+        function updateCharts(attack) {
+            const timestamp = new Date(attack.timestamp).toLocaleString();
+
+            // Update trend chart
+            const trendData = trendChart.data;
+            if (!trendData.labels.includes(timestamp)) {
+                trendData.labels.push(timestamp);
+                trendData.datasets[0].data.push(1);
+            } else {
+                const index = trendData.labels.indexOf(timestamp);
+                trendData.datasets[0].data[index]++;
+            }
+            trendChart.update();
+
+            // Update service chart
+            const serviceData = serviceChart.data;
+            if (!serviceData.labels.includes(attack.service)) {
+                serviceData.labels.push(attack.service);
+                serviceData.datasets[0].data.push(1);
+            } else {
+                const index = serviceData.labels.indexOf(attack.service);
+                serviceData.datasets[0].data[index]++;
+            }
+            serviceChart.update();
+        }
+    </script>
+</body>
+</html>

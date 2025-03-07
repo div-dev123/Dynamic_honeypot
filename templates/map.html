@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded-pill mx-auto mt-3">
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav mx-auto">
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/">Home</a>
+                </li>
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/attack_summary">Attack Summary</a>
+                </li>
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/map">Map</a>
+                </li>
+                <li class="nav-item mx-3">
+                    <a class="nav-link" href="/analysis">Analysis</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    <div class="container mt-5">
+        <h1>Attack Map</h1>
+        <div id="map"></div>
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Initialize Leaflet map
+        const map = L.map('map').setView([0, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Fetch initial data
+        fetch('/data')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(attack => {
+                    const [lat, lon] = attack.geolocation.split(',');
+                    if (lat && lon) {
+                        L.marker([lat, lon]).addTo(map)
+                            .bindPopup(`<b>${attack.ip}</b><br>${attack.service}<br>${attack.timestamp}`)
+                            .openPopup();
+                    }
+                });
+            });
+    </script>
+</body>
+</html>

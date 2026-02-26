@@ -62,37 +62,56 @@ def handle_http(client_socket, client_ip):
         response = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n{\"status\": \"ok\"}"
     elif "POST /data" in request:
         response = "HTTP/1.1 201 Created\r\nContent-Type: text/plain\r\n\r\nData received"
+    elif "POST /login" in request:
+        response = "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/html\r\n\r\n<h1>Login Failed</h1>"
+    elif "GET /admin" in request:
+        response = "HTTP/1.1 403 Forbidden\r\nContent-Type: text/html\r\n\r\n<h1>Access Denied</h1>"
     else:
         response = "HTTP/1.1 404 Not Found\r\nContent-Type: text/html\r\n\r\n<h1>404 Not Found</h1>"
 
     client_socket.sendall(response.encode())
-    log_attack_internal(client_ip, 'HTTP', request, 'Exploitation' if "POST" in request else 'Reconnaissance')
+    log_attack_internal(client_ip, 'HTTP', request, 'Reconnaissance' if "GET" in request else 'Exploitation')
     client_socket.close()
 
+
 def handle_ssh(client_socket, client_ip):
-    client_socket.sendall(b"SSH-2.0-OpenSSH_7.9p1 Debian-10+deb10u2\r\n")
-    client_socket.recv(1024)  # Receive client's SSH protocol version
+    client_socket.sendall(b"SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.5\r\n")
+    client_socket.recv(1024)  
+    client_socket.sendall(b"Username: ")
+    username = client_socket.recv(1024).decode().strip()
     client_socket.sendall(b"Password: ")
     password = client_socket.recv(1024).decode().strip()
-    logging.info(f"SSH login attempt from {client_ip} with password: {password}")
+
+    logging.info(f"SSH login attempt from {client_ip} with username: {username} and password: {password}")
 
     if password == "honeypot":
         client_socket.sendall(b"Welcome to the Honeypot SSH Server\r\n$ ")
         while True:
             command = client_socket.recv(1024).decode().strip()
             logging.info(f"SSH command from {client_ip}: {command}")
+
             if command.lower() == "exit":
                 break
-            client_socket.sendall(b"Command not found\r\n$ ")
+            elif command.lower() == "ls":
+                client_socket.sendall(b"important_data.txt  secrets  logs\r\n$ ")
+            elif command.lower() == "whoami":
+                client_socket.sendall(f"{username}\r\n$ ".encode())
+            elif command.lower() == "pwd":
+                client_socket.sendall(b"/home/user\r\n$ ")
+            elif command.startswith("cat "):
+                client_socket.sendall(b"Access Denied\r\n$ ")
+            else:
+                client_socket.sendall(b"Command not found\r\n$ ")
             log_attack_internal(client_ip, 'SSH', command, 'Exploitation')
     else:
         client_socket.sendall(b"Access denied\r\n")
-        log_attack_internal(client_ip, 'SSH', password, 'Reconnaissance')
+        log_attack_internal(client_ip, 'SSH', f"Failed login for {username}", 'Reconnaissance')
     
     client_socket.close()
 
+
 def handle_mysql(client_socket, client_ip):
-    greeting = b"\x0a5.7.29-0ubuntu0.18.04.1\x00\x32\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+    greeting = b"\x0a5.7.36-0ubuntu0.20.04.1\x00\x32\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
     client_socket.sendall(greeting)
     login_attempt = client_socket.recv(1024).decode()
     logging.info(f"MySQL login attempt from {client_ip}: {login_attempt}")
@@ -101,8 +120,13 @@ def handle_mysql(client_socket, client_ip):
         client_socket.sendall(b"\x00\x00\x00\x02\x00\x00\x00\x02\x00\x00\x00\x00")
         sql_query = client_socket.recv(1024).decode()
         logging.info(f"MySQL query from {client_ip}: {sql_query}")
-        response = b"\x00\x00\x00\x01\x01\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00"
-        client_socket.sendall(response)
+
+        if "SELECT * FROM users" in sql_query:
+            response = b"\x00\x00\x00\x01\x01\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00"
+            client_socket.sendall(response)
+        else:
+            client_socket.sendall(b"Access Denied\x00")
+
         log_attack_internal(client_ip, 'MySQL', sql_query, 'Exploitation')
     else:
         client_socket.sendall(b"\x00\x00\x00\x02\x00\x00\x00\x02\x00\x00\x00\x00")
@@ -110,22 +134,31 @@ def handle_mysql(client_socket, client_ip):
     
     client_socket.close()
 
+
 def handle_ftp(client_socket, client_ip):
     client_socket.sendall(b"220 Welcome to Honeypot FTP Server\r\n")
     while True:
         command = client_socket.recv(1024).decode().strip()
         logging.info(f"FTP command from {client_ip}: {command}")
+
         if command.upper() == "QUIT":
             client_socket.sendall(b"221 Goodbye.\r\n")
             break
         elif command.upper().startswith("USER"):
-            client_socket.sendall(b"331 Please specify the password.\r\n")
+            client_socket.sendall(b"331 Password required.\r\n")
         elif command.upper().startswith("PASS"):
             client_socket.sendall(b"230 Login successful.\r\n")
+        elif command.upper() == "LIST":
+            client_socket.sendall(b"150 Here comes the directory listing.\r\nfile1.txt\r\nfile2.log\r\n226 Directory send OK.\r\n")
+        elif command.upper().startswith("RETR"):
+            client_socket.sendall(b"550 Permission denied.\r\n")
         else:
             client_socket.sendall(b"502 Command not implemented.\r\n")
+
         log_attack_internal(client_ip, 'FTP', command, 'Exploitation')
+
     client_socket.close()
+
 
 def handle_telnet(client_socket, client_ip):
     client_socket.sendall(b"Welcome to Honeypot Telnet Server\r\n")
@@ -143,16 +176,47 @@ def handle_telnet(client_socket, client_ip):
 
 def handle_smtp(client_socket, client_ip):
     client_socket.sendall(b"220 honeypot.local ESMTP Honeypot\r\n")
+    logged_in = False
+    sender = None
+    recipient = None
+
     while True:
         command = client_socket.recv(1024).decode().strip()
         logging.info(f"SMTP command from {client_ip}: {command}")
-        if command.upper() == "QUIT":
+
+        if command.upper().startswith("HELO") or command.upper().startswith("EHLO"):
+            client_socket.sendall(b"250-honeypot.local Hello\r\n250-SIZE 35882577\r\n250-8BITMIME\r\n250 AUTH LOGIN PLAIN\r\n")
+        
+        elif command.upper().startswith("AUTH LOGIN"):
+            client_socket.sendall(b"334 VXNlcm5hbWU6\r\n")  # Base64 for "Username:"
+        
+        elif command.upper().startswith("MAIL FROM"):
+            sender = command.split(":")[-1].strip()
+            client_socket.sendall(b"250 OK\r\n")
+
+        elif command.upper().startswith("RCPT TO"):
+            recipient = command.split(":")[-1].strip()
+            client_socket.sendall(b"250 OK\r\n")
+        
+        elif command.upper() == "DATA":
+            client_socket.sendall(b"354 End data with <CR><LF>.<CR><LF>\r\n")
+            email_data = client_socket.recv(4096).decode().strip()
+            if email_data.endswith("."):
+                logging.info(f"SMTP Email from {client_ip} | Sender: {sender} | Recipient: {recipient} | Data: {email_data}")
+                client_socket.sendall(b"250 OK\r\n")
+                log_attack_internal(client_ip, 'SMTP', email_data, 'Exploitation')
+
+        elif command.upper() == "QUIT":
             client_socket.sendall(b"221 Bye\r\n")
             break
+
         else:
-            client_socket.sendall(b"250 OK\r\n")
-        log_attack_internal(client_ip, 'SMTP', command, 'Exploitation')
+            client_socket.sendall(b"502 Command not implemented\r\n")
+
+        log_attack_internal(client_ip, 'SMTP', command, 'Reconnaissance')
+
     client_socket.close()
+
 
 # Honeypot Engine
 class HoneypotEngine:

@@ -1,9 +1,10 @@
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
 import sqlite3
 from typing import Any
 # Import shared EventBus instance
 from shared_bus import bus
+from mitigation import apply_rl_action
 
 app = Flask(__name__)
 socketio = SocketIO(app)
@@ -78,6 +79,43 @@ def attack_summary():
 @app.route('/map')
 def map_page():
     return render_template('map.html')
+
+
+@app.route('/apply_action', methods=['POST'])
+def apply_action():
+    """Apply a mitigation policy for an attacker IP.
+
+    Expected JSON:
+      {"id": <attack_id>} OR {"ip": "1.2.3.4", "rl_action": "..."}
+    """
+    payload: Any = request.get_json(silent=True) or {}
+    attack_id = payload.get('id')
+    ip = payload.get('ip')
+    rl_action = payload.get('rl_action')
+
+    if attack_id and not ip:
+        conn = get_db()
+        ensure_attacks_table(conn)
+        row = conn.execute('SELECT ip, rl_action FROM attacks WHERE id=?', (attack_id,)).fetchone()
+        conn.close()
+        if not row:
+            return jsonify({'ok': False, 'error': 'attack_not_found'}), 404
+        ip = row['ip']
+        rl_action = rl_action or row['rl_action']
+
+    if not ip:
+        return jsonify({'ok': False, 'error': 'ip_required'}), 400
+
+    pol = apply_rl_action(str(ip), str(rl_action or ''))
+    socketio.emit('action_applied', {
+        'ip': ip,
+        'mode': pol.mode,
+        'delay_seconds': pol.delay_seconds,
+        'expires_at': pol.expires_at,
+        'rl_action': rl_action,
+        'id': attack_id,
+    })
+    return jsonify({'ok': True, 'ip': ip, 'mode': pol.mode, 'delay_seconds': pol.delay_seconds, 'expires_at': pol.expires_at})
 
 @app.route('/analysis')
 def analysis():

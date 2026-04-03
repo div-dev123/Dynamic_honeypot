@@ -94,14 +94,16 @@ Open your browser to: `http://localhost:5001`
 
 ### 2. Honeypot Engine (`honeypot_engine.py`)
 - Simulates vulnerable services:
-  - **HTTP** (port 8080): Web server simulation
-  - **SSH** (port 2222): Secure shell with fake login
-  - **MySQL** (port 33060): Database connection simulation
-  - **FTP** (port 21): File transfer protocol
-  - **Telnet** (port 23): Command-line interface
-  - **SMTP** (port 25): Email server simulation
+  - **HTTP** (default port 8080): Web app simulation with realistic endpoints (e.g., `/admin`, `/robots.txt`, `/wp-login.php`, `/phpmyadmin`) and common exploit paths (SQLi/traversal/cmd-injection)
+  - **SSH** (default port 2222): Stateful pseudo-shell with a small fake filesystem and common attacker commands (`ls`, `cat`, `wget`, etc.)
+  - **MySQL** (default port 33060): Database connection simulation
+  - **FTP** (default port 2121): File transfer protocol simulation
+  - **Telnet** (default port 2323): Command-line interface simulation
+  - **SMTP** (default port 2525): Email server simulation
 - Logs all interactions with attacker details
 - Provides geolocation data for each attack
+
+Note: Ports are configurable via environment variables like `HONEYPOT_FTP_PORT`, `HONEYPOT_TELNET_PORT`, `HONEYPOT_SMTP_PORT`.
 
 ### 3. Web Dashboard (`app.py`)
 - Flask application with real-time WebSocket updates
@@ -129,11 +131,24 @@ curl http://localhost:8080/status
 curl -X POST http://localhost:8080/login
 ```
 
+More realistic probes:
+```bash
+curl http://localhost:8080/robots.txt
+curl http://localhost:8080/wp-login.php
+curl http://localhost:8080/phpmyadmin
+curl "http://localhost:8080/admin?user=admin'%20OR%201=1--"
+curl "http://localhost:8080/index.php?page=../../../../etc/passwd"
+```
+
 **Connect to SSH Service:**
 ```bash
 ssh -p 2222 localhost
 # Try username: honeypot, password: honeypot
 ```
+
+If you want a deterministic login for testing, try:
+- `admin` / `admin123`
+- `root` / `toor`
 
 **Test with Nmap (reconnaissance):**
 ```bash
@@ -200,6 +215,18 @@ DOS_THRESHOLD = 1000       # Packets per IP threshold
 In `honeypot_engine.py`:
 ```python
 ipinfo_token = 'your_api_token_here'
+```
+
+## 🧪 Attack Simulation
+
+To quickly generate realistic traffic (recon + exploit patterns + SSH commands):
+```bash
+python3 tools/simulate_attacks.py --host 127.0.0.1
+```
+
+If you changed ports via env vars:
+```bash
+python3 tools/simulate_attacks.py --host 127.0.0.1 --http-port 8080 --ssh-port 2222
 ```
 
 ### Service Ports

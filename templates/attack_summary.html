@@ -173,6 +173,7 @@
         // Global variables
         let attackData = [];
         let attackTypeChart = null;
+        let currentFilter = 'all';
 
         // Initialize the dashboard
         function initDashboard() {
@@ -251,7 +252,16 @@
             const tableBody = document.getElementById('attackTableBody');
             tableBody.innerHTML = '';
 
-            attackData.slice(-50).reverse().forEach(attack => {
+            const filtered = attackData.filter(a => {
+                if (currentFilter === 'critical') {
+                    const t = getDisplayType(a);
+                    const isAnom = a.ml_is_anomaly === 1 || a.ml_is_anomaly === true;
+                    return isAnom || ['ZeroDay', 'U2R', 'R2L'].includes(t);
+                }
+                return true;
+            });
+
+            filtered.slice(-50).reverse().forEach(attack => {
                 const attackType = getDisplayType(attack);
                 const statusClass = getStatusClass(attackType);
                 const confidence = (attack.ml_confidence !== null && attack.ml_confidence !== undefined) ? `${attack.ml_confidence}%` : 'N/A';
@@ -269,8 +279,11 @@
                     <td><span class="cyber-text">${attack.rl_action || 'N/A'}</span></td>
                     <td><span class="cyber-text">${attack.rl_des !== null && attack.rl_des !== undefined ? attack.rl_des : 'N/A'}</span></td>
                     <td>
-                        <button class="cyber-btn btn-sm" onclick="viewDetails('${attack.id}')">
+                        <button class="cyber-btn btn-sm mr-1" onclick="viewDetails('${attack.id}')" title="View details">
                             <i class="fas fa-search"></i>
+                        </button>
+                        <button class="cyber-btn btn-sm" onclick="applyRecommendedAction('${attack.id}')" title="Apply RL response">
+                            <i class="fas fa-shield-alt"></i>
                         </button>
                     </td>
                 `;
@@ -360,20 +373,80 @@
             updateMetrics();
         });
 
+        socket.on('action_applied', function(data) {
+            const ip = data.ip || 'unknown';
+            const mode = data.mode || 'none';
+            const expiresAt = data.expires_at ? new Date(data.expires_at * 1000).toLocaleString() : 'n/a';
+            alert(`Mitigation applied for ${ip}: ${mode} (expires: ${expiresAt})`);
+        });
+
         // Utility functions
         function filterAttacks(filterType) {
-            // Implementation for filtering attacks
-            console.log('Filtering by:', filterType);
+            currentFilter = filterType || 'all';
+            updateTable();
         }
 
         function exportData() {
-            // Implementation for data export
-            console.log('Exporting data...');
+            const blob = new Blob([JSON.stringify(attackData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `honeypot_attacks_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
         }
 
         function viewDetails(id) {
-            // Implementation for viewing attack details
-            console.log('Viewing details for:', id);
+            const attack = attackData.find(a => String(a.id) === String(id));
+            if (!attack) {
+                alert('Attack not found');
+                return;
+            }
+
+            const type = getDisplayType(attack);
+            const isAnomaly = attack.ml_is_anomaly === 1 || attack.ml_is_anomaly === true;
+            const confidence = (attack.ml_confidence !== null && attack.ml_confidence !== undefined) ? `${attack.ml_confidence}%` : 'N/A';
+
+            // "What was exploited" heuristic: prefer explicit category, fallback to payload pattern
+            const payload = (attack.payload || '').toString();
+            const p = payload.toLowerCase();
+            let exploited = attack.category || type || 'Unknown';
+            if (p.includes('union select') || p.includes('information_schema') || p.includes("' or 1=1")) exploited = 'SQL Injection';
+            if (p.includes('../') || p.includes('etc/passwd')) exploited = 'Directory Traversal';
+            if (p.includes('cgi-bin') && (p.includes(';') || p.includes('&&'))) exploited = 'Command Injection';
+            if (p.includes('wget ') || p.includes('curl ')) exploited = 'Malware Download';
+
+            const lines = [
+                `ID: ${attack.id}`,
+                `Attacker IP: ${attack.ip}`,
+                `Location: ${attack.geolocation || 'Unknown'}`,
+                `Service: ${attack.service}`,
+                `Timestamp: ${formatTimestamp(attack.timestamp)}`,
+                `Suggested exploited technique: ${exploited}`,
+                `ML type: ${type} | Confidence: ${confidence} | Anomaly: ${isAnomaly ? 'Yes' : 'No'}`,
+                `RL response: ${attack.rl_action || 'N/A'} | DES: ${attack.rl_des ?? 'N/A'}`,
+                '',
+                'Payload (preview):',
+                payload.slice(0, 600)
+            ];
+            alert(lines.join('\n'));
+        }
+
+        function applyRecommendedAction(id) {
+            fetch('/apply_action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (!res.ok) {
+                        alert(`Failed to apply action: ${res.error || 'unknown_error'}`);
+                    }
+                })
+                .catch(err => alert('Failed to apply action'));
         }
 
         // Initialize dashboard when page loads

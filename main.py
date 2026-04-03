@@ -55,7 +55,13 @@ def main():
     print()
     print("🔗 Services started:")
     print("   Dashboard: http://localhost:5001")
-    print("   Honeypot Services: Various ports (21, 22, 23, 25, 8080, 33060)")
+    try:
+        from honeypot_engine import SERVICES as HP_SERVICES
+        ports = ", ".join([f"{name}:{cfg['port']}" for name, cfg in HP_SERVICES.items()])
+        print(f"   Honeypot Services: {ports}")
+        print("   (Ports are configurable via HONEYPOT_*_PORT env vars)")
+    except Exception:
+        print("   Honeypot Services: HTTP:8080, SSH:2222, MySQL:33060, FTP:2121, Telnet:2323, SMTP:2525")
     print("   Network Sniffer: Listening on all interfaces")
     print()
     print("📊 Dashboard Views:")

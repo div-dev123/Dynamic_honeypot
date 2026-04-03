@@ -223,14 +223,20 @@
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script>
-        // Simulate live system metrics
+        let attackData = [];
+
+        function getAttackType(attack) {
+            return attack.ml_attack_type || attack.category || 'Normal';
+        }
+
         function updateMetrics() {
-            const threatsDetected = Math.floor(Math.random() * 10);
-            const zeroDay = Math.floor(Math.random() * 3);
-            
+            const total = attackData.length;
+            const threatsDetected = attackData.filter(a => getAttackType(a) !== 'Normal').length;
+            const zeroDay = attackData.filter(a => getAttackType(a) === 'ZeroDay').length;
+
             document.getElementById('threats-detected').textContent = threatsDetected;
             document.getElementById('zero-day').textContent = zeroDay;
-            
+
             // Add status indicators
             if (threatsDetected > 5) {
                 document.getElementById('threats-detected').parentElement.className = 'metric-card status-critical pulse-ring';
@@ -239,6 +245,16 @@
             } else {
                 document.getElementById('threats-detected').parentElement.className = 'metric-card';
             }
+        }
+
+        function loadInitialData() {
+            fetch('/data')
+                .then(r => r.json())
+                .then(data => {
+                    attackData = data;
+                    updateMetrics();
+                })
+                .catch(err => console.error('Error loading data:', err));
         }
 
         // Initialize system
@@ -251,13 +267,31 @@
             setTimeout(() => {
                 btn.innerHTML = originalText;
                 btn.disabled = false;
-                updateMetrics();
+                loadInitialData();
             }, 2000);
         }
 
-        // Start live updates
-        setInterval(updateMetrics, 5000);
-        updateMetrics();
+        // Live updates
+        const socket = io();
+        socket.on('new_attack', function(attack_data) {
+            attackData.push(attack_data);
+            updateMetrics();
+        });
+        socket.on('enriched_attack', function(enriched_data) {
+            const id = enriched_data.id;
+            if (!id) return;
+            const ml = enriched_data.ml_result || {};
+            const existing = attackData.find(a => String(a.id) === String(id));
+            if (existing) {
+                existing.ml_attack_type = ml.attack_type;
+                existing.ml_confidence = ml.confidence;
+                existing.ml_is_anomaly = ml.is_anomaly ? 1 : 0;
+                existing.ml_zero_day = ml.zero_day ? 1 : 0;
+            }
+            updateMetrics();
+        });
+
+        document.addEventListener('DOMContentLoaded', loadInitialData);
     </script>
 </body>
 </html>

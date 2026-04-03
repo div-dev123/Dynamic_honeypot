@@ -10,6 +10,7 @@ A sophisticated network deception system designed to detect, analyze, and visual
 - **Geolocation Tracking**: Maps attack origins using IP geolocation
 - **Statistical Analysis**: Trend analysis and attack pattern recognition
 - **Comprehensive Logging**: Detailed attack records with timestamps and payloads
+- **ML/RL Enrichment**: Events are enriched with ML anomaly/type signals and RL response recommendations (may appear shortly after the base attack is logged)
 
 ## 🏗️ Architecture
 
@@ -110,9 +111,12 @@ Open your browser to: `http://localhost:5001`
   - Statistical Analysis Charts
 - RESTful API for data access
 
+Note: ML/RL enrichment is computed asynchronously via the event bus. On first load, some `ml_*` / `rl_*` fields may be `NULL` and then populate within ~1–2 seconds via WebSocket updates.
+
 ### 4. Database (`honeypot.db`)
 - SQLite database storing attack records
 - Schema includes: IP, geolocation, timestamp, service, payload, category
+- Also includes ML/RL enrichment columns (e.g., `ml_attack_type`, `ml_confidence`, `ml_is_anomaly`, `rl_action`, `rl_des`)
 
 ## 🎮 Usage Examples
 

@@ -173,8 +173,6 @@
         // Global variables
         let attackData = [];
         let attackTypeChart = null;
-        let attackCount = 0;
-        let zeroDayCount = 0;
 
         // Initialize the dashboard
         function initDashboard() {
@@ -237,23 +235,39 @@
                 .catch(error => console.error('Error loading data:', error));
         }
 
+        function getDisplayType(attack) {
+            return attack.ml_attack_type || attack.category || 'Normal';
+        }
+
+        function getStatusClass(attackType) {
+            if (attackType === 'ZeroDay') return 'status-critical';
+            if (attackType === 'DoS' || attackType === 'Probe') return 'status-danger';
+            if (attackType === 'R2L' || attackType === 'U2R') return 'status-warning';
+            return 'status-normal';
+        }
+
         // Update the main table
         function updateTable() {
             const tableBody = document.getElementById('attackTableBody');
             tableBody.innerHTML = '';
 
             attackData.slice(-50).reverse().forEach(attack => {
+                const attackType = getDisplayType(attack);
+                const statusClass = getStatusClass(attackType);
+                const confidence = (attack.ml_confidence !== null && attack.ml_confidence !== undefined) ? `${attack.ml_confidence}%` : 'N/A';
+                const isAnomaly = attack.ml_is_anomaly === 1 || attack.ml_is_anomaly === true;
+
                 const row = tableBody.insertRow();
                 row.innerHTML = `
-                    <td><span class="status-indicator status-normal">${attack.ip}</span></td>
+                    <td><span class="status-indicator ${statusClass}">${attack.ip}</span></td>
                     <td><i class="fas fa-map-marker-alt"></i> ${attack.geolocation || 'Unknown'}</td>
                     <td>${formatTimestamp(attack.timestamp)}</td>
                     <td><span class="cyber-text">${attack.service}</span></td>
-                    <td><span class="status-indicator status-warning">${attack.category}</span></td>
-                    <td>N/A</td>
-                    <td><span class="status-indicator status-normal">No</span></td>
-                    <td>N/A</td>
-                    <td>N/A</td>
+                    <td><span class="status-indicator ${statusClass}">${attackType}</span></td>
+                    <td>${confidence}</td>
+                    <td><span class="status-indicator ${isAnomaly ? 'status-warning' : 'status-normal'}">${isAnomaly ? 'Yes' : 'No'}</span></td>
+                    <td><span class="cyber-text">${attack.rl_action || 'N/A'}</span></td>
+                    <td><span class="cyber-text">${attack.rl_des !== null && attack.rl_des !== undefined ? attack.rl_des : 'N/A'}</span></td>
                     <td>
                         <button class="cyber-btn btn-sm" onclick="viewDetails('${attack.id}')">
                             <i class="fas fa-search"></i>
@@ -277,7 +291,7 @@
             };
 
             attackData.forEach(attack => {
-                const type = attack.category || 'Normal';
+                const type = getDisplayType(attack);
                 if (typeCounts.hasOwnProperty(type)) {
                     typeCounts[type]++;
                 }
@@ -291,9 +305,9 @@
         function updateMetrics() {
             document.getElementById('total-attacks').textContent = attackData.length;
             document.getElementById('active-threats').textContent = attackData.filter(a => 
-                ['DoS', 'Probe', 'R2L', 'U2R', 'ZeroDay'].includes(a.category)
+                ['DoS', 'Probe', 'R2L', 'U2R', 'ZeroDay'].includes(getDisplayType(a))
             ).length;
-            document.getElementById('zero-day-count').textContent = zeroDayCount;
+            document.getElementById('zero-day-count').textContent = attackData.filter(a => getDisplayType(a) === 'ZeroDay').length;
         }
 
         // Format timestamp
@@ -316,54 +330,34 @@
             updateTable();
             updateCharts();
             updateMetrics();
-            attackCount++;
         });
 
         socket.on('enriched_attack', function(enriched_data) {
-            const ml_result = enriched_data.ml_result || {};
-            const rl_result = enriched_data.rl_result || {};
-            
-            // Add enriched data to table
-            const tableBody = document.getElementById('attackTableBody');
-            const row = tableBody.insertRow(0);
-            
-            // Status indicator based on attack type
-            let statusClass = 'status-normal';
-            if (ml_result.attack_type === 'DoS' || ml_result.attack_type === 'Probe') {
-                statusClass = 'status-danger';
-            } else if (ml_result.attack_type === 'R2L' || ml_result.attack_type === 'U2R') {
-                statusClass = 'status-warning';
-            } else if (ml_result.attack_type === 'ZeroDay') {
-                statusClass = 'status-critical';
-                zeroDayCount++;
+            const id = enriched_data.id;
+            if (!id) return;
+
+            const ml = enriched_data.ml_result || {};
+            const rl = enriched_data.rl_result || {};
+
+            const existing = attackData.find(a => String(a.id) === String(id));
+            if (existing) {
+                existing.ml_attack_type = ml.attack_type;
+                existing.ml_confidence = ml.confidence;
+                existing.ml_is_anomaly = ml.is_anomaly ? 1 : 0;
+                existing.ml_zero_day = ml.zero_day ? 1 : 0;
+                existing.ml_ae_error = ml.ae_error;
+                existing.ml_iso_score = ml.iso_score;
+
+                existing.rl_action = rl.action;
+                existing.rl_des = rl.des;
+                existing.rl_q_value = rl.q_value;
+                existing.rl_aggressiveness = rl.aggressiveness;
+                existing.rl_time_bucket = rl.time_bucket;
             }
-            
-            row.innerHTML = `
-                <td><span class="status-indicator ${statusClass}">${enriched_data.ip}</span></td>
-                <td><i class="fas fa-map-marker-alt"></i> N/A</td>
-                <td>${formatTimestamp(enriched_data.timestamp)}</td>
-                <td><span class="cyber-text">${enriched_data.service}</span></td>
-                <td><span class="status-indicator ${statusClass}">${ml_result.attack_type || 'Unknown'}</span></td>
-                <td>${ml_result.confidence || 'N/A'}%</td>
-                <td><span class="status-indicator ${ml_result.is_anomaly ? 'status-warning' : 'status-normal'}">
-                    ${ml_result.is_anomaly ? 'Yes' : 'No'}
-                </span></td>
-                <td><span class="cyber-text">${rl_result.action || 'N/A'}</span></td>
-                <td><span class="cyber-text">${rl_result.des || 'N/A'}</span></td>
-                <td>
-                    <button class="cyber-btn btn-sm" onclick="viewDetails('${enriched_data.ip}')">
-                        <i class="fas fa-search"></i>
-                    </button>
-                </td>
-            `;
-            
-            // Keep only last 50 entries
-            if (tableBody.rows.length > 50) {
-                tableBody.deleteRow(tableBody.rows.length - 1);
-            }
-            
+
+            updateTable();
+            updateCharts();
             updateMetrics();
-            attackCount++;
         });
 
         // Utility functions

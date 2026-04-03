@@ -320,6 +320,7 @@
 
         // Create threat marker with appropriate styling
         function createThreatMarker(lat, lng, attack) {
+            const attackType = attack.ml_attack_type || attack.category || 'Normal';
             let markerClass = 'custom-marker';
             let popupContent = `
                 <div style="color: white; font-family: 'Roboto Mono', monospace;">
@@ -328,16 +329,16 @@
                     </h4>
                     <strong>IP:</strong> ${attack.ip}<br>
                     <strong>Service:</strong> ${attack.service}<br>
-                    <strong>Category:</strong> ${attack.category}<br>
+                    <strong>Category:</strong> ${attackType}<br>
                     <strong>Timestamp:</strong> ${attack.timestamp}<br>
                 </div>
             `;
 
             // Determine marker type based on threat level
-            if (attack.category === 'ZeroDay') {
+            if (attackType === 'ZeroDay') {
                 markerClass += ' critical';
                 popupContent = popupContent.replace('THREAT ALERT', 'ZERO-DAY ALERT');
-            } else if (['DoS', 'R2L', 'U2R'].includes(attack.category)) {
+            } else if (['DoS', 'R2L', 'U2R', 'Probe'].includes(attackType)) {
                 markerClass += ' warning';
                 popupContent = popupContent.replace('THREAT ALERT', 'HIGH THREAT');
             } else {
@@ -364,9 +365,9 @@
             const activeAttacks = threatData.length;
             const uniqueSources = new Set(threatData.map(a => a.ip)).size;
             const criticalAlerts = threatData.filter(a => 
-                ['DoS', 'R2L', 'U2R', 'ZeroDay'].includes(a.category)
+                ['DoS', 'R2L', 'U2R', 'ZeroDay', 'Probe'].includes(a.ml_attack_type || a.category)
             ).length;
-            const zeroDayCount = threatData.filter(a => a.category === 'ZeroDay').length;
+            const zeroDayCount = threatData.filter(a => (a.ml_attack_type || a.category) === 'ZeroDay').length;
 
             document.getElementById('active-attacks').textContent = activeAttacks;
             document.getElementById('unique-sources').textContent = uniqueSources;
@@ -459,8 +460,25 @@
         });
 
         socket.on('enriched_attack', function(enriched_data) {
-            // Add enriched data to map
-            console.log('New enriched attack:', enriched_data);
+            const id = enriched_data.id;
+            if (!id) return;
+
+            const ml = enriched_data.ml_result || {};
+            const rl = enriched_data.rl_result || {};
+
+            const existing = threatData.find(a => String(a.id) === String(id));
+            if (existing) {
+                existing.ml_attack_type = ml.attack_type;
+                existing.ml_confidence = ml.confidence;
+                existing.ml_is_anomaly = ml.is_anomaly ? 1 : 0;
+                existing.ml_zero_day = ml.zero_day ? 1 : 0;
+                existing.rl_action = rl.action;
+                existing.rl_des = rl.des;
+            }
+
+            updateMapMarkers();
+            updateStatistics();
+            updateIntelligencePanel();
         });
 
         // Initialize map when page loads

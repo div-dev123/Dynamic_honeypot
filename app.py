@@ -1,6 +1,7 @@
 from flask import Flask, render_template, jsonify
 from flask_socketio import SocketIO
 import sqlite3
+from typing import Any
 # Import shared EventBus instance
 from shared_bus import bus
 
@@ -11,6 +12,7 @@ DATABASE = 'honeypot.db'
 
 
 def ensure_attacks_table(conn: sqlite3.Connection) -> None:
+    # Create table (new DB) with enrichment columns.
     conn.execute('''CREATE TABLE IF NOT EXISTS attacks (
                      id INTEGER PRIMARY KEY AUTOINCREMENT,
                      ip TEXT,
@@ -18,8 +20,45 @@ def ensure_attacks_table(conn: sqlite3.Connection) -> None:
                      timestamp TEXT,
                      service TEXT,
                      payload TEXT,
-                     category TEXT
+                     category TEXT,
+
+                     -- ML enrichment
+                     ml_attack_type TEXT,
+                     ml_confidence REAL,
+                     ml_is_anomaly INTEGER,
+                     ml_zero_day INTEGER,
+                     ml_ae_error REAL,
+                     ml_iso_score REAL,
+
+                     -- RL enrichment
+                     rl_action TEXT,
+                     rl_des REAL,
+                     rl_q_value REAL,
+                     rl_aggressiveness TEXT,
+                     rl_time_bucket TEXT
                  )''')
+
+    # Migrate older DBs missing these columns.
+    existing_cols = {
+        row['name']
+        for row in conn.execute("PRAGMA table_info(attacks)").fetchall()
+    }
+    desired_cols = {
+        'ml_attack_type': 'TEXT',
+        'ml_confidence': 'REAL',
+        'ml_is_anomaly': 'INTEGER',
+        'ml_zero_day': 'INTEGER',
+        'ml_ae_error': 'REAL',
+        'ml_iso_score': 'REAL',
+        'rl_action': 'TEXT',
+        'rl_des': 'REAL',
+        'rl_q_value': 'REAL',
+        'rl_aggressiveness': 'TEXT',
+        'rl_time_bucket': 'TEXT',
+    }
+    for col_name, col_type in desired_cols.items():
+        if col_name not in existing_cols:
+            conn.execute(f"ALTER TABLE attacks ADD COLUMN {col_name} {col_type}")
     conn.commit()
 
 def get_db():
@@ -71,16 +110,18 @@ def log_attack(ip, geolocation, timestamp, service, payload, category):
     conn = get_db()
     try:
         ensure_attacks_table(conn)
-        conn.execute(
+        cur = conn.execute(
             'INSERT INTO attacks (ip, geolocation, timestamp, service, payload, category) VALUES (?, ?, ?, ?, ?, ?)',
             (ip, geolocation, timestamp, service, payload, category),
         )
         conn.commit()
+        attack_id = cur.lastrowid
     finally:
         conn.close()
 
     # Send real-time update to clients
     attack_data = {
+        'id': attack_id,
         'ip': ip,
         'geolocation': geolocation,
         'timestamp': timestamp,
@@ -89,6 +130,8 @@ def log_attack(ip, geolocation, timestamp, service, payload, category):
         'category': category
     }
     socketio.emit('new_attack', attack_data)
+
+    return attack_id
 
 # Subscribe to EventBus for enriched events
 
@@ -136,8 +179,54 @@ def handle_enriched_event(enriched_event):
         return str(obj)
     
     # Send enriched event to dashboard
+    attack_id = enriched_event.get('attack_id')
+
+    # Persist enrichment back into DB if we can correlate.
+    if attack_id is not None:
+        try:
+            conn = get_db()
+            try:
+                ensure_attacks_table(conn)
+                conn.execute(
+                    '''UPDATE attacks
+                       SET ml_attack_type=?,
+                           ml_confidence=?,
+                           ml_is_anomaly=?,
+                           ml_zero_day=?,
+                           ml_ae_error=?,
+                           ml_iso_score=?,
+                           rl_action=?,
+                           rl_des=?,
+                           rl_q_value=?,
+                           rl_aggressiveness=?,
+                           rl_time_bucket=?
+                     WHERE id=?''',
+                    (
+                        ml_result.get('attack_type'),
+                        ml_result.get('confidence'),
+                        int(bool(ml_result.get('is_anomaly'))) if ml_result.get('is_anomaly') is not None else None,
+                        int(bool(ml_result.get('zero_day'))) if ml_result.get('zero_day') is not None else None,
+                        ml_result.get('ae_error'),
+                        ml_result.get('iso_score'),
+                        rl_result.get('action'),
+                        rl_result.get('des'),
+                        rl_result.get('q_value'),
+                        rl_result.get('aggressiveness'),
+                        rl_result.get('time_bucket'),
+                        int(attack_id),
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            # Don't take down the pipeline if persistence fails.
+            print(f'Enrichment persistence error: {e}')
+
     socketio.emit('enriched_attack', {
+        'id': int(attack_id) if attack_id is not None else None,
         'ip': str(enriched_event.get('src_ip', 'unknown')),
+        'geolocation': str(enriched_event.get('geolocation', '')),
         'timestamp': str(enriched_event.get('timestamp', '')),
         'service': str(enriched_event.get('service', 'unknown')),
         'payload': make_serializable(enriched_event.get('payload', '')),

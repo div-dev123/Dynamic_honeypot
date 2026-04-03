@@ -534,16 +534,21 @@
 
             // Process each attack
             attackData.forEach(attack => {
+                const attackType = attack.ml_attack_type || attack.category || 'Normal';
                 // Timeline data
                 const date = new Date(attack.timestamp);
                 const hour = date.getHours();
                 if (!analysisData.timeline[hour]) {
                     analysisData.timeline[hour] = { 'Normal': 0, 'DoS': 0, 'Probe': 0, 'R2L': 0, 'U2R': 0, 'ZeroDay': 0 };
                 }
-                analysisData.timeline[hour][attack.category]++;
+                if (analysisData.timeline[hour][attackType] !== undefined) {
+                    analysisData.timeline[hour][attackType]++;
+                }
 
                 // Attack types
-                analysisData.attackTypes[attack.category]++;
+                if (analysisData.attackTypes[attackType] !== undefined) {
+                    analysisData.attackTypes[attackType]++;
+                }
 
                 // Services
                 analysisData.services[attack.service] = (analysisData.services[attack.service] || 0) + 1;
@@ -605,7 +610,7 @@
         // Update metrics
         function updateMetrics() {
             const totalIncidents = attackData.length;
-            const zeroDayCount = attackData.filter(a => a.category === 'ZeroDay').length;
+            const zeroDayCount = attackData.filter(a => (a.ml_attack_type || a.category) === 'ZeroDay').length;
             const recentData = attackData.filter(a => {
                 const attackTime = new Date(a.timestamp);
                 const now = new Date();
@@ -651,8 +656,30 @@
         });
 
         socket.on('enriched_attack', function(enriched_data) {
-            // Process enriched data
-            console.log('New enriched analysis data:', enriched_data);
+            const id = enriched_data.id;
+            if (!id) return;
+
+            const ml = enriched_data.ml_result || {};
+            const rl = enriched_data.rl_result || {};
+            const existing = attackData.find(a => String(a.id) === String(id));
+            if (existing) {
+                existing.ml_attack_type = ml.attack_type;
+                existing.ml_confidence = ml.confidence;
+                existing.ml_is_anomaly = ml.is_anomaly ? 1 : 0;
+                existing.ml_zero_day = ml.zero_day ? 1 : 0;
+                existing.ml_ae_error = ml.ae_error;
+                existing.ml_iso_score = ml.iso_score;
+
+                existing.rl_action = rl.action;
+                existing.rl_des = rl.des;
+                existing.rl_q_value = rl.q_value;
+                existing.rl_aggressiveness = rl.aggressiveness;
+                existing.rl_time_bucket = rl.time_bucket;
+            }
+
+            processAnalysisData();
+            updateAllCharts();
+            updateMetrics();
         });
 
         // Initialize when page loads

@@ -38,13 +38,18 @@ def log_attack_internal(ip, service, payload, category, duration=0.0, src_bytes=
         geolocation = "13.0878,80.2785"  # Default fallback
         logging.error(f"IPinfo lookup error for IP {ip}: {e}")
     timestamp = str(datetime.utcnow())
+
+    # Log to database/dashboard first so we can correlate with ML enrichment.
+    attack_id = log_attack(ip, geolocation, timestamp, service, str(payload), category)
     
     # Emit event to ML pipeline
     connection_event = {
+        'attack_id': attack_id,
         'src_ip': ip,
         'dst_port': SERVICES.get(service, {}).get('port', 0),
         'protocol': 'tcp',  # Default, can be updated based on service
         'service': service.lower(),
+        'geolocation': geolocation,
         'duration': duration,
         'src_bytes': src_bytes,
         'dst_bytes': dst_bytes,
@@ -56,9 +61,6 @@ def log_attack_internal(ip, service, payload, category, duration=0.0, src_bytes=
     }
     
     bus.emit(connection_event)
-    
-    # Also log to database for dashboard
-    log_attack(ip, geolocation, timestamp, service, str(payload), category)
 
 def handle_http(client_socket, client_ip):
     start_time = time.time()

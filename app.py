@@ -97,25 +97,50 @@ def handle_enriched_event(enriched_event):
     ml_result = enriched_event.get('ml', {})
     rl_result = enriched_event.get('rl', {})
     
-    # Ensure all values are JSON serializable
+    # Ensure all values are JSON serializable.
+    # Socket.IO uses JSON encoding; numpy/scikit-learn types (e.g. numpy.bool_)
+    # are a common source of "not JSON serializable" errors.
     def make_serializable(obj):
-        if isinstance(obj, bool):
-            return bool(obj)
-        elif isinstance(obj, dict):
-            return {k: make_serializable(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            return [make_serializable(item) for item in obj]
-        elif obj is None:
+        if obj is None:
             return None
-        else:
+
+        # Native JSON types
+        if isinstance(obj, (str, int, float, bool)):
             return obj
+
+        # bytes-like (payloads, packets)
+        if isinstance(obj, (bytes, bytearray, memoryview)):
+            try:
+                return bytes(obj).decode('utf-8', errors='replace')
+            except Exception:
+                return str(obj)
+
+        # numpy scalars / arrays
+        try:
+            import numpy as np
+
+            if isinstance(obj, np.generic):
+                # Includes numpy.bool_, numpy.float32, etc.
+                return obj.item()
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+        except Exception:
+            pass
+
+        if isinstance(obj, dict):
+            return {str(k): make_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple, set)):
+            return [make_serializable(item) for item in obj]
+
+        # Fallback
+        return str(obj)
     
     # Send enriched event to dashboard
     socketio.emit('enriched_attack', {
         'ip': str(enriched_event.get('src_ip', 'unknown')),
         'timestamp': str(enriched_event.get('timestamp', '')),
         'service': str(enriched_event.get('service', 'unknown')),
-        'payload': str(enriched_event.get('payload', '')),
+        'payload': make_serializable(enriched_event.get('payload', '')),
         'ml_result': make_serializable(ml_result),
         'rl_result': make_serializable(rl_result)
     })

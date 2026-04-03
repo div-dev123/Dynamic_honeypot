@@ -4,6 +4,7 @@
 import numpy as np
 import pickle
 import time
+import warnings
 from collections import defaultdict
 
 class FeatureExtractor:
@@ -116,8 +117,14 @@ class FeatureExtractor:
                          dtype=np.float32)
 
         # Scale + select
-        vector = self.scaler.transform(vector.reshape(1, -1))
-        vector = self.selector.transform(vector)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                'ignore',
+                message=r"X does not have valid feature names, but .* was fitted with feature names",
+                category=UserWarning,
+            )
+            vector = self.scaler.transform(vector.reshape(1, -1))
+            vector = self.selector.transform(vector)
         return vector
 
     def _compute_hot(self, event):

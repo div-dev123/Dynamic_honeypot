@@ -65,12 +65,15 @@ class MLPipeline:
             pred_idx = self.r2l_idx if specialist_pred == 0 \
                        else self.u2r_idx
 
-        # Zero-Day: anomaly + low confidence
-        if is_anomaly and confidence < self.conf_threshold:
-            zero_day  = True
-            attack_label = 'ZeroDay'
-        else:
-            attack_label = self.class_names[pred_idx]
+        # Variety-first labeling: keep the classifier label for dashboards.
+        # Zero-day becomes a *flag* (still surfaced via ml_zero_day), instead of
+        # overriding the main attack_type label.
+        attack_label = self.class_names[pred_idx]
+
+        # Zero-Day: anomaly + very low confidence + strong reconstruction error.
+        # This makes Zero-Day rarer and prevents "everything" from collapsing to it.
+        if is_anomaly and confidence < (self.conf_threshold * 0.75) and ae_error > (self.ae_threshold * 1.5):
+            zero_day = True
 
         return {
             'attack_type'   : attack_label,

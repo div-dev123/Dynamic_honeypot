@@ -11,6 +11,7 @@ A sophisticated network deception system designed to detect, analyze, and visual
 - **Statistical Analysis**: Trend analysis and attack pattern recognition
 - **Comprehensive Logging**: Detailed attack records with timestamps and payloads
 - **ML/RL Enrichment**: Events are enriched with ML anomaly/type signals and RL response recommendations (may appear shortly after the base attack is logged)
+- **Decoy Web App + Honeytokens**: A realistic multi-step decoy app that issues trackable reset links/API keys/pixels that “phone home” when used
 
 ## 🏗️ Architecture
 
@@ -228,6 +229,81 @@ If you changed ports via env vars:
 ```bash
 python3 tools/simulate_attacks.py --host 127.0.0.1 --http-port 8080 --ssh-port 2222
 ```
+
+To smoke-test the decoy web app honeytoken paths (API key + reset link + pixel):
+```bash
+python3 tools/smoke_honeytokens.py
+```
+
+## 🎓 Teacher Demo (5–10 minutes)
+
+This is a clean “story” you can narrate live: an attacker touches the honeypot, the dashboard logs it immediately, ML/RL enrichment arrives shortly after, and you can apply a mitigation response.
+
+### 1) Start the system
+```bash
+python3 main.py
+```
+
+Open:
+- `http://localhost:5001/` (Home)
+- `http://localhost:5001/attack_summary` (Attack Summary)
+- `http://localhost:5001/map` (Geographic Map)
+- `http://localhost:5001/analysis` (Analysis)
+- `http://localhost:5001/webapp` (Decoy Web App)
+
+### 2) Explain what the dashboard is showing
+In `/attack_summary`, every row is a single “attack event” stored in SQLite (`honeypot.db`).
+
+Key idea to say out loud:
+- The base event is logged immediately.
+- ML/RL enrichment is asynchronous: you may see `ml_*` / `rl_*` fields appear 1–2 seconds later via a WebSocket “enriched update”.
+
+### 3) Generate a realistic attack on-demand
+Run the built-in simulator (recon + exploit-like HTTP probes + a pseudo-SSH session):
+```bash
+python3 tools/simulate_attacks.py --host 127.0.0.1
+```
+
+Now refresh `/attack_summary` (or just watch it) and point out:
+- Multiple services: HTTP + SSH (and whatever else is enabled)
+- Payload examples: SQL injection probes, path traversal probes, suspicious commands
+- ML variety: events can be classified as `Probe`, `DoS`, `R2L`, `U2R`, etc.
+- Zero-day is a separate flag (`ml_zero_day`) rather than the only label
+
+### 4) Show the “response” (mitigation) loop
+In `/attack_summary`, use the Actions column to apply a response for an IP (e.g., `drop` or `tarpit`).
+
+Then rerun the simulator again and explain:
+- The system is stateful per source IP.
+- “Drop” immediately cuts new connections.
+- “Tarpit” slows the attacker down (artificial delay).
+
+### 5) Demonstrate honeytokens that “phone home”
+Open the decoy web app:
+- `http://localhost:5001/webapp`
+
+Do one of these live:
+- Password reset flow: submit an email, then click the reset link that appears (this is the honeytoken).
+- API key flow: generate a key and use it.
+
+Each of these triggers a `Honeytoken Used` event that is:
+- written to `honeypot.db` (so it persists)
+- pushed into the same event bus so ML/RL enrichment also applies
+
+You can also show the internal audit trail at:
+- `http://localhost:5001/webapp/audit`
+
+## 🧭 Website Flow (end-to-end)
+
+Use this as your “how it works” explanation:
+
+1. A connection or request hits a honeypot surface (HTTP/SSH/etc) or the decoy web app.
+2. The handler logs a base event into SQLite (`attacks` table).
+3. The app immediately emits a `new_attack` WebSocket event so the UI updates in real time.
+4. In parallel, the EventBus extracts features and runs ML inference (classification + anomaly), then runs the RL policy to pick a recommended response.
+5. When enrichment finishes, the system updates the same DB row and emits an `enriched_attack` WebSocket event.
+6. The dashboard merges the enrichment into the existing row (so you see fields “fill in” without duplicates).
+7. If you apply an action from the UI, the honeypot engine consults that policy per IP and enforces it on future connections.
 
 ### Service Ports
 Modify service ports in `honeypot_engine.py`:

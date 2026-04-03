@@ -36,6 +36,11 @@
                                 <i class="fas fa-chart-line"></i> INTELLIGENCE ANALYSIS
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/webapp">
+                                <i class="fas fa-user-shield"></i> DECOY WEB APP
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
@@ -232,7 +237,7 @@
         function updateMetrics() {
             const total = attackData.length;
             const threatsDetected = attackData.filter(a => getAttackType(a) !== 'Normal').length;
-            const zeroDay = attackData.filter(a => getAttackType(a) === 'ZeroDay').length;
+            const zeroDay = attackData.filter(a => a.ml_zero_day === 1 || a.ml_zero_day === true).length;
 
             document.getElementById('threats-detected').textContent = threatsDetected;
             document.getElementById('zero-day').textContent = zeroDay;

@@ -39,6 +39,11 @@
                                 <i class="fas fa-chart-line"></i> ANALYSIS
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/webapp">
+                                <i class="fas fa-user-shield"></i> DECOY WEB APP
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
@@ -115,7 +120,9 @@
                     <h3 class="cyber-subheading text-center mb-4">
                         <i class="fas fa-chart-line"></i> THREAT ACTIVITY TIMELINE
                     </h3>
-                    <canvas id="timelineChart" height="300"></canvas>
+                    <div class="chart-container" style="height: 340px;">
+                        <canvas id="timelineChart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="col-lg-4">
@@ -123,7 +130,9 @@
                     <h3 class="cyber-subheading text-center mb-4">
                         <i class="fas fa-pie-chart"></i> ATTACK TYPE DISTRIBUTION
                     </h3>
-                    <canvas id="attackTypeChart" height="300"></canvas>
+                    <div class="chart-container" style="height: 340px;">
+                        <canvas id="attackTypeChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -137,7 +146,9 @@
                     <h3 class="cyber-subheading text-center mb-4">
                         <i class="fas fa-server"></i> SERVICE TARGET ANALYSIS
                     </h3>
-                    <canvas id="serviceChart" height="250"></canvas>
+                    <div class="chart-container" style="height: 280px;">
+                        <canvas id="serviceChart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6">
@@ -145,7 +156,9 @@
                     <h3 class="cyber-subheading text-center mb-4">
                         <i class="fas fa-globe"></i> GEOGRAPHIC DISTRIBUTION
                     </h3>
-                    <canvas id="geoChart" height="250"></canvas>
+                    <div class="chart-container" style="height: 280px;">
+                        <canvas id="geoChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -291,7 +304,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
     <script>
         // Global variables
         let timelineChart, attackTypeChart, serviceChart, geoChart;
@@ -394,6 +407,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 0 },
                     plugins: {
                         legend: {
                             labels: {
@@ -456,6 +470,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 0 },
                     plugins: {
                         legend: {
                             labels: {
@@ -486,6 +501,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 0 },
                     plugins: {
                         legend: {
                             labels: {
@@ -543,6 +559,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: { duration: 0 },
                     plugins: {
                         legend: {
                             labels: {
@@ -617,6 +634,8 @@
                 if (attack.geolocation && attack.geolocation !== 'N/A') {
                     const region = getRegionFromCoordinates(attack.geolocation);
                     analysisData.geolocation[region] = (analysisData.geolocation[region] || 0) + 1;
+                } else {
+                    analysisData.geolocation['Unknown'] = (analysisData.geolocation['Unknown'] || 0) + 1;
                 }
             });
         }
@@ -684,7 +703,7 @@
         // Update metrics
         function updateMetrics() {
             const totalIncidents = attackData.length;
-            const zeroDayCount = attackData.filter(a => (a.ml_attack_type || a.category) === 'ZeroDay').length;
+            const zeroDayCount = attackData.filter(a => a.ml_zero_day === 1 || a.ml_zero_day === true).length;
             const recentData = attackData.filter(a => {
                 const attackTime = parseAttackTime(a.timestamp);
                 const now = new Date();

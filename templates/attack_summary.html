@@ -39,6 +39,11 @@
                                 <i class="fas fa-chart-line"></i> ANALYSIS
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/webapp">
+                                <i class="fas fa-user-shield"></i> DECOY WEB APP
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>
@@ -171,7 +176,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
     <script>
         // Global variables
         let attackData = [];
@@ -191,47 +196,53 @@
 
         // Initialize the dashboard
         function initDashboard() {
-            // Initialize Chart.js
-            const ctx = document.getElementById('attackTypeChart').getContext('2d');
-            attackTypeChart = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Normal', 'DoS', 'Probe', 'R2L', 'U2R', 'ZeroDay'],
-                    datasets: [{
-                        data: [0, 0, 0, 0, 0, 0],
-                        backgroundColor: [
-                            'rgba(0, 255, 136, 0.8)',
-                            'rgba(255, 68, 68, 0.8)',
-                            'rgba(255, 170, 0, 0.8)',
-                            'rgba(187, 134, 252, 0.8)',
-                            'rgba(255, 105, 180, 0.8)',
-                            'rgba(255, 0, 255, 0.8)'
-                        ],
-                        borderColor: [
-                            'var(--accent-green)',
-                            'var(--accent-red)',
-                            'var(--accent-orange)',
-                            'var(--accent-purple)',
-                            'rgba(255, 105, 180, 1)',
-                            'rgba(255, 0, 255, 1)'
-                        ],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            labels: {
-                                color: '#ffffff',
-                                font: {
-                                    family: 'Roboto Mono'
+            // Initialize Chart.js (don’t block data/hotspots if chart init fails)
+            try {
+                const ctx = document.getElementById('attackTypeChart').getContext('2d');
+                attackTypeChart = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Normal', 'DoS', 'Probe', 'R2L', 'U2R', 'ZeroDay'],
+                        datasets: [{
+                            data: [0, 0, 0, 0, 0, 0],
+                            backgroundColor: [
+                                'rgba(0, 255, 136, 0.8)',
+                                'rgba(255, 68, 68, 0.8)',
+                                'rgba(255, 170, 0, 0.8)',
+                                'rgba(187, 134, 252, 0.8)',
+                                'rgba(255, 105, 180, 0.8)',
+                                'rgba(255, 0, 255, 0.8)'
+                            ],
+                            borderColor: [
+                                'var(--accent-green)',
+                                'var(--accent-red)',
+                                'var(--accent-orange)',
+                                'var(--accent-purple)',
+                                'rgba(255, 105, 180, 1)',
+                                'rgba(255, 0, 255, 1)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        animation: { duration: 0 },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#ffffff',
+                                    font: {
+                                        family: 'Roboto Mono'
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
+            } catch (e) {
+                console.error('AttackType chart init failed:', e);
+                attackTypeChart = null;
+            }
 
             // Load initial data
             loadInitialData();
@@ -349,10 +360,7 @@
                 const isAnom = a.ml_is_anomaly === 1 || a.ml_is_anomaly === true;
                 return isAnom || (t && t !== 'Normal');
             }).length;
-            document.getElementById('zero-day-count').textContent = attackData.filter(a => {
-                const t = getDisplayType(a);
-                return t === 'ZeroDay' || (t && t.toString().toLowerCase().includes('zero'));
-            }).length;
+            document.getElementById('zero-day-count').textContent = attackData.filter(a => a.ml_zero_day === 1 || a.ml_zero_day === true).length;
 
             updateGeoHotspots();
         }
@@ -389,8 +397,7 @@
 
             const regionStats = {};
             attackData.forEach(a => {
-                if (!a.geolocation) return;
-                const region = getRegionFromCoordinates(a.geolocation);
+                const region = a.geolocation ? getRegionFromCoordinates(a.geolocation) : 'Unknown';
                 regionStats[region] = (regionStats[region] || 0) + 1;
             });
 

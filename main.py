@@ -69,6 +69,8 @@ def main():
     print("   Attack Summary: http://localhost:5001/attack_summary")
     print("   Geographic Map: http://localhost:5001/map")
     print("   Analysis: http://localhost:5001/analysis")
+    print("   Decoy Web App: http://localhost:5001/webapp")
+    print("   Web App Audit: http://localhost:5001/webapp/audit")
     print()
 
     try:

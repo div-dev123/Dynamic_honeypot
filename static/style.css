@@ -218,6 +218,18 @@ body::before {
     color: #e0e0e0;
 }
 
+/* Chart layout stability (prevents huge/glitchy canvases) */
+.chart-container {
+    position: relative;
+    width: 100%;
+}
+
+.chart-container canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
 /* Dashboard Metrics */
 .metrics-grid {
     display: grid;

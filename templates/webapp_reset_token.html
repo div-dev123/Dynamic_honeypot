@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset Password | Acme Console</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="cyber-header">
+        <div class="cyber-container">
+            <nav class="navbar navbar-expand-lg navbar-dark cyber-navbar">
+                <a class="navbar-brand glow-text" href="/">
+                    <i class="fas fa-brain"></i> NEURAL HONEYPOT
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item"><a class="nav-link" href="/webapp"><i class="fas fa-user-shield"></i> DECOY WEB APP</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/attack_summary"><i class="fas fa-shield-alt"></i> THREAT DASHBOARD</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <section class="cyber-container">
+        <div class="cyber-card" style="max-width: 900px; margin-left: auto; margin-right: auto;">
+            <h1 class="cyber-heading"><i class="fas fa-unlock"></i> Reset Password</h1>
+
+            {% if completed %}
+                <div class="terminal-text">
+                    <div class="cyber-text"><span style="color: var(--accent-green);">[OK]</span> Password updated successfully (decoy).</div>
+                </div>
+                <a class="cyber-btn mt-3" href="/webapp"><i class="fas fa-arrow-left"></i> Back to Web App</a>
+            {% else %}
+                <p class="cyber-text">Reset token: <span style="color: var(--accent-cyan);">{{ token }}</span></p>
+                <p class="cyber-text" style="opacity: 0.8;">This page visit is tracked. Opening this link already triggers a <b>Honeytoken Used</b> event.</p>
+
+                <form method="POST">
+                    <div class="form-group">
+                        <label class="cyber-text">New Password</label>
+                        <input class="form-control" type="password" name="password" placeholder="New password" />
+                    </div>
+                    <button class="cyber-btn" type="submit"><i class="fas fa-save"></i> Set Password</button>
+                    <a class="cyber-btn" href="/webapp" style="margin-left: 8px;"><i class="fas fa-arrow-left"></i> Back</a>
+                </form>
+            {% endif %}
+        </div>
+    </section>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

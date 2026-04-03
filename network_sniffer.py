@@ -2,7 +2,8 @@ from scapy.all import sniff, IP, TCP, UDP
 import logging
 from collections import defaultdict
 import time
-from honeypot_engine import honeypot_engine
+# Import shared EventBus instance
+from shared_bus import bus
 
 # Configure logging for network traffic
 traffic_logger = logging.getLogger('network_traffic')
@@ -35,19 +36,8 @@ def detect_port_scan(packet):
         traffic_logger.debug(f"Port scan data for IP {ip_src}: {scan_data[ip_src]}")
         if len(scan_data[ip_src]) > PORT_SCAN_THRESHOLD:
             traffic_logger.warning(f"Port scan detected from IP: {ip_src}")
-            # Activate honeypot services based on detected port scans
-        if 443 in scan_data[ip_src]:
-            honeypot_engine.activate_service('HTTP')
-        if 443 in scan_data[ip_src]:
-            honeypot_engine.activate_service('SSH')
-        if 443 in scan_data[ip_src]:
-            honeypot_engine.activate_service('MySQL')
-        if 443 in scan_data[ip_src]:
-            honeypot_engine.activate_service('FTP')
-        if 443 in scan_data[ip_src]:
-            honeypot_engine.activate_service('Telnet')
-        if 443 in scan_data[ip_src]:
-            honeypot_engine.activate_service('SMTP')
+            # Service activation belongs to the honeypot engine.
+            # The sniffer's responsibility is detection + telemetry.
 
 def detect_dos(packet):
     """ Detects DoS attacks by tracking the number of packets from a single IP in a short time span. """
@@ -64,7 +54,28 @@ def process_packet(packet):
         ip_dst = packet[IP].dst
         protocol = packet[IP].proto
         
+        # Determine protocol name
+        protocol_name = "tcp" if protocol == 6 else "udp" if protocol == 17 else "other"
+        
         traffic_logger.info(f"Packet: {ip_src} -> {ip_dst}, Protocol: {protocol}")
+        
+        # Emit event to ML pipeline
+        connection_event = {
+            'src_ip': ip_src,
+            'dst_port': 0,  # Will be determined by service
+            'protocol': protocol_name,
+            'service': 'unknown',
+            'duration': 0.0,
+            'src_bytes': len(packet),
+            'dst_bytes': 0,
+            'flag': 'SF',  # Default flag
+            'logged_in': False,
+            'failed_logins': 0,
+            'payload': bytes(packet),
+            'timestamp': time.time(),
+        }
+        
+        bus.emit(connection_event)
         
         # Detect suspicious activity
         detect_port_scan(packet)

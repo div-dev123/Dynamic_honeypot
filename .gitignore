@@ -27,6 +27,9 @@ env/
 ENV/
 .venv/
 .env/
+.env
+.env.*
+.python-version
 
 # IDE
 .vscode/
@@ -35,19 +38,36 @@ ENV/
 *.swo
 *~
 
+# Local tooling
+.qoder/
+.pytest_cache/
+
 # Database
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+*.sqlite-journal
+*.sqlite3-journal
+*.db-wal
+*.db-shm
+*.sqlite-wal
+*.sqlite-shm
 
 # Log Files
 *.log
-network_traffic.log
-honeypot.log
+
+# GeoIP databases (not required by current implementation)
+*.mmdb
+*.mmdb*
+*.log.*
 
 # OS
 .DS_Store
 Thumbs.db
+
+# GeoIP / MaxMind
+GeoLite2-*.mmdb*
 
 # Docker
 *.tar.gz
@@ -56,3 +76,10 @@ docker-compose.override.yml
 # Temporary files
 *.tmp
 *.temp
+
+# Python tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml

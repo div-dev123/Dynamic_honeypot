@@ -61,16 +61,23 @@ cd dynamic_honeypot
 pip install flask flask-socketio scapy ipinfo
 ```
 
-3. **Start the system**
-
-Terminal 1 - Web Dashboard:
+Optional (recommended): configure IP geolocation token
 ```bash
-python3 app.py
+export IPINFO_TOKEN="your_token_here"
 ```
 
-Terminal 2 - Network Monitor:
+3. **Start the system**
+
+Recommended (starts honeypot services + sniffer + dashboard together):
 ```bash
+python3 main.py
+```
+
+Or run components separately:
+```bash
+python3 honeypot_engine.py
 python3 network_sniffer.py
+python3 app.py
 ```
 
 4. **Access the dashboard**

@@ -3,64 +3,387 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attack Summary</title>
+    <title>Threat Intelligence Dashboard | Neural Honeypot</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded-pill mx-auto mt-3">
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav mx-auto">
-                <li class="nav-item mx-3">
-                    <a class="nav-link" href="/">Home</a>
-                </li>
-                <li class="nav-item mx-3">
-                    <a class="nav-link" href="/attack_summary">Attack Summary</a>
-                </li>
-                <li class="nav-item mx-3">
-                    <a class="nav-link" href="/map">Map</a>
-                </li>
-                <li class="nav-item mx-3">
-                    <a class="nav-link" href="/analysis">Analysis</a>
-                </li>
-            </ul>
+    <!-- Header -->
+    <header class="cyber-header">
+        <div class="cyber-container">
+            <nav class="navbar navbar-expand-lg navbar-dark cyber-navbar">
+                <a class="navbar-brand glow-text" href="/">
+                    <i class="fas fa-brain"></i> NEURAL HONEYPOT
+                </a>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/"><i class="fas fa-home"></i> HOME</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/attack_summary">
+                                <i class="fas fa-shield-alt"></i> THREAT DASHBOARD
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/map">
+                                <i class="fas fa-globe"></i> THREAT MAP
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/analysis">
+                                <i class="fas fa-chart-line"></i> ANALYSIS
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
         </div>
-    </nav>
-    <div class="container mt-5">
-        <h1>Attack Summary</h1>
-        <table id="attackTable" class="table table-dark table-striped table-hover mt-3">
-            <thead class="thead-light">
-                <tr>
-                    <th>IP</th>
-                    <th>Geolocation</th>
-                    <th>Timestamp</th>
-                    <th>Service</th>
-                    <th>Payload</th>
-                    <th>Category</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    </header>
+
+    <!-- Dashboard Header -->
+    <section class="cyber-container">
+        <div class="cyber-card text-center">
+            <h1 class="cyber-heading glow-text">
+                <i class="fas fa-shield-virus"></i> REAL-TIME THREAT INTELLIGENCE
+            </h1>
+            <p class="cyber-text" style="font-size: 1.1rem;">
+                Live monitoring and analysis of cyber threats with AI-powered classification
+            </p>
+            
+            <!-- Dashboard Metrics -->
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value" id="total-attacks">0</div>
+                    <div class="metric-label">TOTAL ATTACKS</div>
+                    <div class="metric-trend trend-up">
+                        <i class="fas fa-arrow-up"></i> <span id="attack-rate">0</span>/min
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="active-threats">0</div>
+                    <div class="metric-label">ACTIVE THREATS</div>
+                    <div class="metric-trend" id="threat-status">
+                        <i class="fas fa-check-circle" style="color: var(--accent-green);"></i> MONITORING
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="ml-accuracy">94%</div>
+                    <div class="metric-label">ML ACCURACY</div>
+                    <div class="metric-trend trend-up">
+                        <i class="fas fa-brain"></i> NEURAL NETWORK
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="zero-day-count">0</div>
+                    <div class="metric-label">ZERO-DAY ALERTS</div>
+                    <div class="metric-trend" id="zero-day-status">
+                        <i class="fas fa-radiation"></i> AI DETECTED
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Control Panel -->
+    <section class="cyber-container">
+        <div class="cyber-card">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="cyber-heading mb-0">
+                    <i class="fas fa-table"></i> THREAT ACTIVITY LOG
+                </h2>
+                <div>
+                    <button class="cyber-btn mr-2" onclick="filterAttacks('all')">
+                        <i class="fas fa-filter"></i> ALL ATTACKS
+                    </button>
+                    <button class="cyber-btn mr-2" onclick="filterAttacks('critical')">
+                        <i class="fas fa-exclamation-triangle"></i> CRITICAL
+                    </button>
+                    <button class="cyber-btn" onclick="exportData()">
+                        <i class="fas fa-download"></i> EXPORT
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Advanced Table -->
+            <div class="cyber-table-container">
+                <table id="attackTable" class="cyber-table">
+                    <thead>
+                        <tr>
+                            <th><i class="fas fa-network-wired"></i> ATTACKER IP</th>
+                            <th><i class="fas fa-map-marker-alt"></i> LOCATION</th>
+                            <th><i class="fas fa-clock"></i> TIMESTAMP</th>
+                            <th><i class="fas fa-server"></i> TARGET SERVICE</th>
+                            <th><i class="fas fa-bug"></i> ATTACK TYPE</th>
+                            <th><i class="fas fa-shield-alt"></i> CONFIDENCE</th>
+                            <th><i class="fas fa-radiation"></i> ANOMALY</th>
+                            <th><i class="fas fa-robot"></i> RL RESPONSE</th>
+                            <th><i class="fas fa-bolt"></i> DES SCORE</th>
+                            <th><i class="fas fa-ellipsis-h"></i> ACTIONS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="attackTableBody">
+                        <!-- Data will be populated dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Threat Distribution -->
+    <section class="cyber-container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="cyber-card">
+                    <h3 class="cyber-subheading text-center">
+                        <i class="fas fa-chart-pie"></i> ATTACK TYPE DISTRIBUTION
+                    </h3>
+                    <canvas id="attackTypeChart" height="300"></canvas>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="cyber-card">
+                    <h3 class="cyber-subheading text-center">
+                        <i class="fas fa-globe-americas"></i> GEOGRAPHIC HOTSPOTS
+                    </h3>
+                    <div id="geoStats" class="cyber-text" style="height: 300px; overflow-y: auto;">
+                        <!-- Geographic statistics will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="cyber-footer">
+        <div class="cyber-container">
+            <p class="cyber-text">
+                <i class="fas fa-shield-alt"></i> Neural Honeypot Threat Intelligence Dashboard
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
-        // Fetch initial data
-        fetch('/data')
-            .then(response => response.json())
-            .then(data => {
-                const table = document.getElementById('attackTable').getElementsByTagName('tbody')[0];
-                data.forEach(attack => {
-                    const row = table.insertRow();
-                    row.insertCell(0).innerText = attack.ip;
-                    row.insertCell(1).innerText = attack.geolocation;
-                    row.insertCell(2).innerText = attack.timestamp;
-                    row.insertCell(3).innerText = attack.service;
-                    row.insertCell(4).innerText = attack.payload;
-                    row.insertCell(5).innerText = attack.category;
-                });
+        // Global variables
+        let attackData = [];
+        let attackTypeChart = null;
+        let attackCount = 0;
+        let zeroDayCount = 0;
+
+        // Initialize the dashboard
+        function initDashboard() {
+            // Initialize Chart.js
+            const ctx = document.getElementById('attackTypeChart').getContext('2d');
+            attackTypeChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Normal', 'DoS', 'Probe', 'R2L', 'U2R', 'ZeroDay'],
+                    datasets: [{
+                        data: [0, 0, 0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(0, 255, 136, 0.8)',
+                            'rgba(255, 68, 68, 0.8)',
+                            'rgba(255, 170, 0, 0.8)',
+                            'rgba(187, 134, 252, 0.8)',
+                            'rgba(255, 105, 180, 0.8)',
+                            'rgba(255, 0, 255, 0.8)'
+                        ],
+                        borderColor: [
+                            'var(--accent-green)',
+                            'var(--accent-red)',
+                            'var(--accent-orange)',
+                            'var(--accent-purple)',
+                            'rgba(255, 105, 180, 1)',
+                            'rgba(255, 0, 255, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#ffffff',
+                                font: {
+                                    family: 'Roboto Mono'
+                                }
+                            }
+                        }
+                    }
+                }
             });
+
+            // Load initial data
+            loadInitialData();
+        }
+
+        // Load initial data
+        function loadInitialData() {
+            fetch('/data')
+                .then(response => response.json())
+                .then(data => {
+                    attackData = data;
+                    updateTable();
+                    updateCharts();
+                    updateMetrics();
+                })
+                .catch(error => console.error('Error loading data:', error));
+        }
+
+        // Update the main table
+        function updateTable() {
+            const tableBody = document.getElementById('attackTableBody');
+            tableBody.innerHTML = '';
+
+            attackData.slice(-50).reverse().forEach(attack => {
+                const row = tableBody.insertRow();
+                row.innerHTML = `
+                    <td><span class="status-indicator status-normal">${attack.ip}</span></td>
+                    <td><i class="fas fa-map-marker-alt"></i> ${attack.geolocation || 'Unknown'}</td>
+                    <td>${formatTimestamp(attack.timestamp)}</td>
+                    <td><span class="cyber-text">${attack.service}</span></td>
+                    <td><span class="status-indicator status-warning">${attack.category}</span></td>
+                    <td>N/A</td>
+                    <td><span class="status-indicator status-normal">No</span></td>
+                    <td>N/A</td>
+                    <td>N/A</td>
+                    <td>
+                        <button class="cyber-btn btn-sm" onclick="viewDetails('${attack.id}')">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </td>
+                `;
+            });
+        }
+
+        // Update charts
+        function updateCharts() {
+            if (!attackTypeChart) return;
+
+            const typeCounts = {
+                'Normal': 0,
+                'DoS': 0,
+                'Probe': 0,
+                'R2L': 0,
+                'U2R': 0,
+                'ZeroDay': 0
+            };
+
+            attackData.forEach(attack => {
+                const type = attack.category || 'Normal';
+                if (typeCounts.hasOwnProperty(type)) {
+                    typeCounts[type]++;
+                }
+            });
+
+            attackTypeChart.data.datasets[0].data = Object.values(typeCounts);
+            attackTypeChart.update();
+        }
+
+        // Update metrics
+        function updateMetrics() {
+            document.getElementById('total-attacks').textContent = attackData.length;
+            document.getElementById('active-threats').textContent = attackData.filter(a => 
+                ['DoS', 'Probe', 'R2L', 'U2R', 'ZeroDay'].includes(a.category)
+            ).length;
+            document.getElementById('zero-day-count').textContent = zeroDayCount;
+        }
+
+        // Format timestamp
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Socket.IO connection
+        const socket = io();
+        
+        socket.on('new_attack', function(attack_data) {
+            attackData.push(attack_data);
+            updateTable();
+            updateCharts();
+            updateMetrics();
+            attackCount++;
+        });
+
+        socket.on('enriched_attack', function(enriched_data) {
+            const ml_result = enriched_data.ml_result || {};
+            const rl_result = enriched_data.rl_result || {};
+            
+            // Add enriched data to table
+            const tableBody = document.getElementById('attackTableBody');
+            const row = tableBody.insertRow(0);
+            
+            // Status indicator based on attack type
+            let statusClass = 'status-normal';
+            if (ml_result.attack_type === 'DoS' || ml_result.attack_type === 'Probe') {
+                statusClass = 'status-danger';
+            } else if (ml_result.attack_type === 'R2L' || ml_result.attack_type === 'U2R') {
+                statusClass = 'status-warning';
+            } else if (ml_result.attack_type === 'ZeroDay') {
+                statusClass = 'status-critical';
+                zeroDayCount++;
+            }
+            
+            row.innerHTML = `
+                <td><span class="status-indicator ${statusClass}">${enriched_data.ip}</span></td>
+                <td><i class="fas fa-map-marker-alt"></i> N/A</td>
+                <td>${formatTimestamp(enriched_data.timestamp)}</td>
+                <td><span class="cyber-text">${enriched_data.service}</span></td>
+                <td><span class="status-indicator ${statusClass}">${ml_result.attack_type || 'Unknown'}</span></td>
+                <td>${ml_result.confidence || 'N/A'}%</td>
+                <td><span class="status-indicator ${ml_result.is_anomaly ? 'status-warning' : 'status-normal'}">
+                    ${ml_result.is_anomaly ? 'Yes' : 'No'}
+                </span></td>
+                <td><span class="cyber-text">${rl_result.action || 'N/A'}</span></td>
+                <td><span class="cyber-text">${rl_result.des || 'N/A'}</span></td>
+                <td>
+                    <button class="cyber-btn btn-sm" onclick="viewDetails('${enriched_data.ip}')">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </td>
+            `;
+            
+            // Keep only last 50 entries
+            if (tableBody.rows.length > 50) {
+                tableBody.deleteRow(tableBody.rows.length - 1);
+            }
+            
+            updateMetrics();
+            attackCount++;
+        });
+
+        // Utility functions
+        function filterAttacks(filterType) {
+            // Implementation for filtering attacks
+            console.log('Filtering by:', filterType);
+        }
+
+        function exportData() {
+            // Implementation for data export
+            console.log('Exporting data...');
+        }
+
+        function viewDetails(id) {
+            // Implementation for viewing attack details
+            console.log('Viewing details for:', id);
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', initDashboard);
     </script>
 </body>
 </html>

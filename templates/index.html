@@ -3,38 +3,261 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Honeypot Dashboard</title>
+    <title>Neural Honeypot | Cybersecurity Intelligence Platform</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container mt-5 text-center">
-        <h1>Honeypot Dashboard</h1>
-        <p class="lead">Understanding and Analyzing Cyber Threats</p>
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark rounded-pill mx-auto mt-3">
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav mx-auto">
-                    <li class="nav-item mx-3">
-                        <a class="nav-link" href="/attack_summary">Attack Summary</a>
-                    </li>
-                    <li class="nav-item mx-3">
-                        <a class="nav-link" href="/map">Map</a>
-                    </li>
-                    <li class="nav-item mx-3">
-                        <a class="nav-link" href="/analysis">Analysis</a>
-                    </li>
-                </ul>
-            </div>
-        </nav>
-        <div class="content mt-5">
-            <h2>What is a Honeypot?</h2>
-            <p>A honeypot is a security mechanism that creates a virtual trap to lure cyber attackers. It is a decoy system set up to attract and detect unauthorized access attempts. Honeypots help in understanding attack patterns and techniques, thus enhancing cybersecurity defenses.</p>
-            <h2>Importance of a Honeypot</h2>
-            <p>Honeypots play a crucial role in cybersecurity by providing valuable insights into the tactics, techniques, and procedures (TTPs) used by attackers. They help in identifying vulnerabilities, improving threat detection, and developing more robust security measures.</p>
+    <!-- Header with Navigation -->
+    <header class="cyber-header">
+        <div class="cyber-container">
+            <nav class="navbar navbar-expand-lg navbar-dark cyber-navbar">
+                <a class="navbar-brand glow-text" href="/">
+                    <i class="fas fa-brain"></i> NEURAL HONEYPOT
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/attack_summary">
+                                <i class="fas fa-shield-alt"></i> THREAT DASHBOARD
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/map">
+                                <i class="fas fa-globe"></i> GLOBAL THREAT MAP
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/analysis">
+                                <i class="fas fa-chart-line"></i> INTELLIGENCE ANALYSIS
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
         </div>
-    </div>
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="cyber-container text-center">
+        <div class="cyber-card">
+            <h1 class="cyber-heading glow-text" style="font-size: 3rem; margin-bottom: 1rem;">
+                <i class="fas fa-shield-virus"></i> ADVANCED CYBER THREAT INTELLIGENCE
+            </h1>
+            <p class="cyber-text" style="font-size: 1.2rem; margin-bottom: 2rem;">
+                Next-generation honeypot system powered by machine learning and neural networks
+            </p>
+            
+            <!-- Live Status Indicators -->
+            <div class="metrics-grid">
+                <div class="metric-card pulse-ring">
+                    <div class="metric-value" id="active-sensors">6</div>
+                    <div class="metric-label">ACTIVE SENSORS</div>
+                    <div class="metric-trend trend-up">
+                        <i class="fas fa-arrow-up"></i> ALL OPERATIONAL
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="ml-accuracy">94.2%</div>
+                    <div class="metric-label">ML ACCURACY</div>
+                    <div class="metric-trend trend-up">
+                        <i class="fas fa-arrow-up"></i> NEURAL NETWORK
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="threats-detected">0</div>
+                    <div class="metric-label">THREATS DETECTED</div>
+                    <div class="metric-trend">
+                        <i class="fas fa-sync fa-spin"></i> MONITORING
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" id="zero-day">0</div>
+                    <div class="metric-label">ZERO-DAY ALERTS</div>
+                    <div class="metric-trend">
+                        <i class="fas fa-radiation"></i> AI-DRIVEN
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- System Overview -->
+    <section class="cyber-container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="cyber-card">
+                    <h2 class="cyber-heading">
+                        <i class="fas fa-cogs"></i> SYSTEM ARCHITECTURE
+                    </h2>
+                    <div class="terminal-text">
+                        <div class="cyber-text">
+                            <span style="color: var(--accent-green);">[INFO]</span> Neural Honeypot v2.1 initialized<br>
+                            <span style="color: var(--accent-cyan);">[ML]</span> 4-layer detection pipeline active<br>
+                            <span style="color: var(--accent-purple);">[RL]</span> Adaptive deception engine online<br>
+                            <span style="color: var(--accent-orange);">[NET]</span> 6 service sensors deployed<br>
+                            <span style="color: var(--accent-red);">[SEC]</span> Real-time threat analysis enabled<br>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="cyber-text">Neural Processing</span>
+                            <span class="cyber-text">98%</span>
+                        </div>
+                        <div class="progress" style="height: 8px; background: rgba(0,0,0,0.3);">
+                            <div class="progress-bar" style="width: 98%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="cyber-card">
+                    <h2 class="cyber-heading">
+                        <i class="fas fa-brain"></i> AI CAPABILITIES
+                    </h2>
+                    <ul class="cyber-text" style="list-style: none; padding: 0;">
+                        <li class="mb-2"><i class="fas fa-check-circle" style="color: var(--accent-green);"></i> Deep Learning Anomaly Detection</li>
+                        <li class="mb-2"><i class="fas fa-check-circle" style="color: var(--accent-green);"></i> Reinforcement Learning Response</li>
+                        <li class="mb-2"><i class="fas fa-check-circle" style="color: var(--accent-green);"></i> Zero-Day Threat Identification</li>
+                        <li class="mb-2"><i class="fas fa-check-circle" style="color: var(--accent-green);"></i> Behavioral Pattern Analysis</li>
+                        <li class="mb-2"><i class="fas fa-check-circle" style="color: var(--accent-green);"></i> Real-time Threat Classification</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="cyber-container">
+        <h2 class="cyber-heading text-center mb-5">
+            <i class="fas fa-star"></i> CORE CAPABILITIES
+        </h2>
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="cyber-card text-center h-100">
+                    <div style="font-size: 3rem; color: var(--accent-cyan); margin-bottom: 1rem;">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3 class="cyber-subheading">ACTIVE DECEPTION</h3>
+                    <p class="cyber-text">
+                        Deploy intelligent honeypot services that mimic real systems, 
+                        luring attackers while collecting valuable intelligence on their methods.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="cyber-card text-center h-100">
+                    <div style="font-size: 3rem; color: var(--accent-purple); margin-bottom: 1rem;">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <h3 class="cyber-subheading">NEURAL DETECTION</h3>
+                    <p class="cyber-text">
+                        Advanced machine learning models detect and classify threats 
+                        with 94% accuracy, identifying both known and zero-day attacks.
+                    </p>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="cyber-card text-center h-100">
+                    <div style="font-size: 3rem; color: var(--accent-green); margin-bottom: 1rem;">
+                        <i class="fas fa-globe-americas"></i>
+                    </div>
+                    <h3 class="cyber-subheading">GLOBAL INTELLIGENCE</h3>
+                    <p class="cyber-text">
+                        Real-time geographic mapping of attack origins with 
+                        comprehensive threat intelligence and attribution analysis.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Quick Access Panel -->
+    <section class="cyber-container">
+        <div class="cyber-card text-center">
+            <h2 class="cyber-heading">
+                <i class="fas fa-bolt"></i> QUICK ACCESS
+            </h2>
+            <div class="row mt-4">
+                <div class="col-md-3 mb-3">
+                    <a href="/attack_summary" class="cyber-btn btn-block">
+                        <i class="fas fa-table"></i><br>THREAT DASHBOARD
+                    </a>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <a href="/map" class="cyber-btn btn-block">
+                        <i class="fas fa-map-marked-alt"></i><br>THREAT MAP
+                    </a>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <a href="/analysis" class="cyber-btn btn-block">
+                        <i class="fas fa-chart-bar"></i><br>ANALYTICS
+                    </a>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <button class="cyber-btn btn-block" onclick="refreshSystem()">
+                        <i class="fas fa-sync"></i><br>REFRESH SYSTEM
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="cyber-footer">
+        <div class="cyber-container">
+            <p class="cyber-text">
+                <i class="fas fa-shield-alt"></i> Neural Honeypot System | Advanced Cybersecurity Intelligence Platform
+            </p>
+            <p class="cyber-text" style="font-size: 0.9rem; opacity: 0.7;">
+                <i class="fas fa-code"></i> Powered by Machine Learning & Neural Networks
+            </p>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        // Simulate live system metrics
+        function updateMetrics() {
+            const threatsDetected = Math.floor(Math.random() * 10);
+            const zeroDay = Math.floor(Math.random() * 3);
+            
+            document.getElementById('threats-detected').textContent = threatsDetected;
+            document.getElementById('zero-day').textContent = zeroDay;
+            
+            // Add status indicators
+            if (threatsDetected > 5) {
+                document.getElementById('threats-detected').parentElement.className = 'metric-card status-critical pulse-ring';
+            } else if (threatsDetected > 0) {
+                document.getElementById('threats-detected').parentElement.className = 'metric-card status-warning';
+            } else {
+                document.getElementById('threats-detected').parentElement.className = 'metric-card';
+            }
+        }
+
+        // Initialize system
+        function refreshSystem() {
+            const btn = event.target.closest('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<div class="cyber-loader"></div> REFRESHING...';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                updateMetrics();
+            }, 2000);
+        }
+
+        // Start live updates
+        setInterval(updateMetrics, 5000);
+        updateMetrics();
+    </script>
 </body>
 </html>

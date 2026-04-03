@@ -83,3 +83,8 @@ docker-compose.override.yml
 .ruff_cache/
 .coverage
 coverage.xml
+
+honeypot.log
+honeypot.db
+network_traffic.log
+

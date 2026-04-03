@@ -16,6 +16,9 @@
                 <a class="navbar-brand glow-text" href="/">
                     <i class="fas fa-brain"></i> NEURAL HONEYPOT
                 </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav ml-auto">
                         <li class="nav-item">
@@ -165,7 +168,7 @@
     </footer>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -174,6 +177,17 @@
         let attackData = [];
         let attackTypeChart = null;
         let currentFilter = 'all';
+
+        function parseAttackTime(value) {
+            if (value === null || value === undefined) return null;
+            if (typeof value === 'number') {
+                const ms = value < 10_000_000_000 ? value * 1000 : value;
+                const d = new Date(ms);
+                return isNaN(d.getTime()) ? null : d;
+            }
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? null : d;
+        }
 
         // Initialize the dashboard
         function initDashboard() {
@@ -241,10 +255,17 @@
         }
 
         function getStatusClass(attackType) {
-            if (attackType === 'ZeroDay') return 'status-critical';
-            if (attackType === 'DoS' || attackType === 'Probe') return 'status-danger';
-            if (attackType === 'R2L' || attackType === 'U2R') return 'status-warning';
-            return 'status-normal';
+            const raw = (attackType || 'Normal').toString();
+            const t = raw.toLowerCase();
+
+            if (raw === 'ZeroDay' || t.includes('zero')) return 'status-critical';
+            if (raw === 'Normal' || t === 'normal') return 'status-normal';
+
+            if (raw === 'DoS' || t.includes('dos')) return 'status-danger';
+            if (raw === 'Probe' || t.includes('probe') || t.includes('scan') || t.includes('recon')) return 'status-danger';
+
+            if (raw === 'R2L' || raw === 'U2R') return 'status-warning';
+            return 'status-warning';
         }
 
         // Update the main table
@@ -256,7 +277,7 @@
                 if (currentFilter === 'critical') {
                     const t = getDisplayType(a);
                     const isAnom = a.ml_is_anomaly === 1 || a.ml_is_anomaly === true;
-                    return isAnom || ['ZeroDay', 'U2R', 'R2L'].includes(t);
+                    return isAnom || (t && t !== 'Normal');
                 }
                 return true;
             });
@@ -294,38 +315,51 @@
         function updateCharts() {
             if (!attackTypeChart) return;
 
-            const typeCounts = {
-                'Normal': 0,
-                'DoS': 0,
-                'Probe': 0,
-                'R2L': 0,
-                'U2R': 0,
-                'ZeroDay': 0
-            };
-
-            attackData.forEach(attack => {
-                const type = getDisplayType(attack);
-                if (typeCounts.hasOwnProperty(type)) {
-                    typeCounts[type]++;
-                }
+            const counts = {};
+            attackData.forEach(a => {
+                const t = getDisplayType(a);
+                counts[t] = (counts[t] || 0) + 1;
             });
+            const top = Object.entries(counts)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 8);
 
-            attackTypeChart.data.datasets[0].data = Object.values(typeCounts);
+            const palette = [
+                'rgba(0, 255, 136, 0.65)',
+                'rgba(0, 255, 255, 0.65)',
+                'rgba(187, 134, 252, 0.65)',
+                'rgba(255, 170, 0, 0.65)',
+                'rgba(255, 68, 68, 0.65)',
+                'rgba(255, 0, 255, 0.65)',
+                'rgba(255, 105, 180, 0.65)',
+                'rgba(120, 120, 140, 0.65)'
+            ];
+
+            attackTypeChart.data.labels = top.map(([k]) => k);
+            attackTypeChart.data.datasets[0].backgroundColor = top.map((_, i) => palette[i % palette.length]);
+            attackTypeChart.data.datasets[0].data = top.map(([, v]) => v);
             attackTypeChart.update();
         }
 
         // Update metrics
         function updateMetrics() {
             document.getElementById('total-attacks').textContent = attackData.length;
-            document.getElementById('active-threats').textContent = attackData.filter(a => 
-                ['DoS', 'Probe', 'R2L', 'U2R', 'ZeroDay'].includes(getDisplayType(a))
-            ).length;
-            document.getElementById('zero-day-count').textContent = attackData.filter(a => getDisplayType(a) === 'ZeroDay').length;
+            document.getElementById('active-threats').textContent = attackData.filter(a => {
+                const t = getDisplayType(a);
+                const isAnom = a.ml_is_anomaly === 1 || a.ml_is_anomaly === true;
+                return isAnom || (t && t !== 'Normal');
+            }).length;
+            document.getElementById('zero-day-count').textContent = attackData.filter(a => {
+                const t = getDisplayType(a);
+                return t === 'ZeroDay' || (t && t.toString().toLowerCase().includes('zero'));
+            }).length;
+
+            updateGeoHotspots();
         }
 
         // Format timestamp
         function formatTimestamp(timestamp) {
-            const date = new Date(timestamp);
+            const date = parseAttackTime(timestamp) || new Date();
             return date.toLocaleString('en-US', {
                 month: 'short',
                 day: 'numeric',
@@ -333,6 +367,50 @@
                 minute: '2-digit',
                 second: '2-digit'
             });
+        }
+
+        function getRegionFromCoordinates(geolocation) {
+            const parts = (geolocation || '').split(',');
+            if (parts.length < 2) return 'Unknown';
+            const lat = parseFloat(parts[0].trim());
+            const lng = parseFloat(parts[1].trim());
+            if (isNaN(lat) || isNaN(lng)) return 'Unknown';
+            if (lat > 60) return 'Arctic';
+            if (lat < -60) return 'Antarctic';
+            if (lng > -20 && lng < 60) return 'Europe/Africa';
+            if (lng > 60 && lng < 180) return 'Asia/Pacific';
+            if (lng < -20 && lng > -100) return 'Americas';
+            return 'Other';
+        }
+
+        function updateGeoHotspots() {
+            const el = document.getElementById('geoStats');
+            if (!el) return;
+
+            const regionStats = {};
+            attackData.forEach(a => {
+                if (!a.geolocation) return;
+                const region = getRegionFromCoordinates(a.geolocation);
+                regionStats[region] = (regionStats[region] || 0) + 1;
+            });
+
+            const top = Object.entries(regionStats)
+                .sort(([, a], [, b]) => b - a)
+                .slice(0, 8);
+
+            if (!top.length) {
+                el.innerHTML = '<div class="terminal-text">No geographic data yet</div>';
+                return;
+            }
+
+            el.innerHTML = top.map(([region, count]) => {
+                return `
+                    <div class="d-flex justify-content-between align-items-center mb-2" style="padding: 6px 8px; border-left: 2px solid var(--accent-cyan); background: rgba(255,255,255,0.02);">
+                        <span>${region}</span>
+                        <span style="color: var(--accent-cyan);">${count}</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Socket.IO connection

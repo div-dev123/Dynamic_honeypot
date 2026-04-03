@@ -16,6 +16,9 @@
                 <a class="navbar-brand glow-text" href="/">
                     <i class="fas fa-brain"></i> NEURAL HONEYPOT
                 </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav ml-auto">
                         <li class="nav-item">
@@ -285,7 +288,7 @@
     </footer>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -300,6 +303,41 @@
             services: {},
             geolocation: {}
         };
+
+        function parseAttackTime(value) {
+            if (value === null || value === undefined) return null;
+            if (typeof value === 'number') {
+                const ms = value < 10_000_000_000 ? value * 1000 : value;
+                const d = new Date(ms);
+                return isNaN(d.getTime()) ? null : d;
+            }
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? null : d;
+        }
+
+        function normalizeAttackType(attack) {
+            const raw = (attack.ml_attack_type || attack.category || 'Normal').toString();
+            const t = raw.toLowerCase();
+
+            if (['normal', 'dos', 'probe', 'r2l', 'u2r', 'zeroday'].includes(t)) {
+                if (t === 'zeroday') return 'ZeroDay';
+                return t.toUpperCase() === t ? t : t.charAt(0).toUpperCase() + t.slice(1);
+            }
+
+            // Map descriptive categories into broad buckets for analytics charts.
+            if (t.includes('recon') || t.includes('scan') || t.includes('probe')) return 'Probe';
+            if (t.includes('brute') || t.includes('login')) return 'R2L';
+            if (t.includes('sql') || t.includes('traversal') || t.includes('command injection') || t.includes('malware upload')) return 'U2R';
+            if (t.includes('malware download') || t.includes('execution') || t.includes('post-exploitation')) return 'U2R';
+            return 'Probe';
+        }
+
+        function timeframeCutoffMs() {
+            const now = Date.now();
+            if (timeframe === 'hour') return now - 60 * 60 * 1000;
+            if (timeframe === 'week') return now - 7 * 24 * 60 * 60 * 1000;
+            return now - 24 * 60 * 60 * 1000;
+        }
 
         // Initialize all charts
         function initCharts() {
@@ -324,17 +362,24 @@
                         borderWidth: 2,
                         fill: true
                     }, {
-                        label: 'Reconnaissance',
+                        label: 'Probe Activity',
                         data: [],
                         borderColor: 'rgba(255, 170, 0, 1)',
                         backgroundColor: 'rgba(255, 170, 0, 0.1)',
                         borderWidth: 2,
                         fill: true
                     }, {
-                        label: 'Access Attacks',
+                        label: 'R2L Attempts',
                         data: [],
                         borderColor: 'rgba(187, 134, 252, 1)',
                         backgroundColor: 'rgba(187, 134, 252, 0.1)',
+                        borderWidth: 2,
+                        fill: true
+                    }, {
+                        label: 'U2R Attempts',
+                        data: [],
+                        borderColor: 'rgba(255, 105, 180, 1)',
+                        backgroundColor: 'rgba(255, 105, 180, 0.1)',
                         borderWidth: 2,
                         fill: true
                     }, {
@@ -532,23 +577,38 @@
                 geolocation: {}
             };
 
-            // Process each attack
-            attackData.forEach(attack => {
-                const attackType = attack.ml_attack_type || attack.category || 'Normal';
-                // Timeline data
-                const date = new Date(attack.timestamp);
-                const hour = date.getHours();
-                if (!analysisData.timeline[hour]) {
-                    analysisData.timeline[hour] = { 'Normal': 0, 'DoS': 0, 'Probe': 0, 'R2L': 0, 'U2R': 0, 'ZeroDay': 0 };
+            const cutoff = timeframeCutoffMs();
+            const recent = attackData.filter(a => {
+                const d = parseAttackTime(a.timestamp);
+                return d ? d.getTime() >= cutoff : false;
+            });
+
+            const bucketKey = (d) => {
+                if (timeframe === 'hour') {
+                    const min = d.getMinutes();
+                    const bucket = Math.floor(min / 5) * 5;
+                    return `${d.getHours().toString().padStart(2, '0')}:${bucket.toString().padStart(2, '0')}`;
                 }
-                if (analysisData.timeline[hour][attackType] !== undefined) {
-                    analysisData.timeline[hour][attackType]++;
+                if (timeframe === 'week') {
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }
+                return `${d.getHours().toString().padStart(2, '0')}:00`;
+            };
+
+            // Process each attack
+            recent.forEach(attack => {
+                const attackType = normalizeAttackType(attack);
+
+                const date = parseAttackTime(attack.timestamp);
+                if (date) {
+                    const key = bucketKey(date);
+                    if (!analysisData.timeline[key]) {
+                        analysisData.timeline[key] = { 'Normal': 0, 'DoS': 0, 'Probe': 0, 'R2L': 0, 'U2R': 0, 'ZeroDay': 0 };
+                    }
+                    analysisData.timeline[key][attackType] = (analysisData.timeline[key][attackType] || 0) + 1;
                 }
 
-                // Attack types
-                if (analysisData.attackTypes[attackType] !== undefined) {
-                    analysisData.attackTypes[attackType]++;
-                }
+                if (analysisData.attackTypes[attackType] !== undefined) analysisData.attackTypes[attackType]++;
 
                 // Services
                 analysisData.services[attack.service] = (analysisData.services[attack.service] || 0) + 1;
@@ -564,7 +624,20 @@
         // Update all charts
         function updateAllCharts() {
             // Update timeline chart
-            const hours = Object.keys(analysisData.timeline).sort((a, b) => a - b);
+            const keys = Object.keys(analysisData.timeline);
+            keys.sort((a, b) => {
+                // best-effort ordering for HH:MM / HH:00 buckets; otherwise fallback to string.
+                const toNum = (k) => {
+                    const m = /^\d{2}:\d{2}$/.exec(k);
+                    if (!m) return null;
+                    const [hh, mm] = k.split(':').map(n => parseInt(n, 10));
+                    return (hh * 60) + mm;
+                };
+                const an = toNum(a);
+                const bn = toNum(b);
+                if (an !== null && bn !== null) return an - bn;
+                return a.localeCompare(b);
+            });
             const timelineData = {
                 'Normal': [],
                 'DoS': [],
@@ -574,18 +647,19 @@
                 'ZeroDay': []
             };
 
-            hours.forEach(hour => {
+            keys.forEach(k => {
                 Object.keys(timelineData).forEach(type => {
-                    timelineData[type].push(analysisData.timeline[hour][type] || 0);
+                    timelineData[type].push((analysisData.timeline[k] && analysisData.timeline[k][type]) ? analysisData.timeline[k][type] : 0);
                 });
             });
 
-            timelineChart.data.labels = hours.map(h => `${h}:00`);
+            timelineChart.data.labels = keys;
             timelineChart.data.datasets[0].data = timelineData['Normal'];
             timelineChart.data.datasets[1].data = timelineData['DoS'];
             timelineChart.data.datasets[2].data = timelineData['Probe'];
             timelineChart.data.datasets[3].data = timelineData['R2L'];
-            timelineChart.data.datasets[4].data = timelineData['ZeroDay'];
+            timelineChart.data.datasets[4].data = timelineData['U2R'];
+            timelineChart.data.datasets[5].data = timelineData['ZeroDay'];
             timelineChart.update();
 
             // Update attack type chart
@@ -612,8 +686,9 @@
             const totalIncidents = attackData.length;
             const zeroDayCount = attackData.filter(a => (a.ml_attack_type || a.category) === 'ZeroDay').length;
             const recentData = attackData.filter(a => {
-                const attackTime = new Date(a.timestamp);
+                const attackTime = parseAttackTime(a.timestamp);
                 const now = new Date();
+                if (!attackTime) return false;
                 const timeDiff = now - attackTime;
                 return timeDiff <= (timeframe === 'hour' ? 3600000 : timeframe === 'day' ? 86400000 : 604800000);
             });

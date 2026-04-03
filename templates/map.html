@@ -14,7 +14,7 @@
             height: 600px;
             border-radius: 10px;
             border: 1px solid rgba(0, 255, 255, 0.3);
-            box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.12);
         }
         
         .custom-marker {
@@ -23,24 +23,24 @@
             border-radius: 50%;
             width: 20px;
             height: 20px;
-            box-shadow: 0 0 10px var(--accent-cyan);
-            animation: pulse 2s infinite;
+            box-shadow: 0 0 6px rgba(0, 255, 255, 0.25);
+            animation: none;
         }
         
         .custom-marker.critical {
             background: var(--accent-red);
-            box-shadow: 0 0 15px var(--accent-red);
-            animation: pulseCritical 1s infinite;
+            box-shadow: 0 0 8px rgba(255, 68, 68, 0.25);
+            animation: none;
         }
         
         .custom-marker.warning {
             background: var(--accent-orange);
-            box-shadow: 0 0 12px var(--accent-orange);
+            box-shadow: 0 0 7px rgba(255, 170, 0, 0.22);
         }
         
         .custom-marker.normal {
             background: var(--accent-green);
-            box-shadow: 0 0 8px var(--accent-green);
+            box-shadow: 0 0 6px rgba(0, 255, 136, 0.22);
         }
         
         @keyframes pulseCritical {
@@ -58,6 +58,9 @@
                 <a class="navbar-brand glow-text" href="/">
                     <i class="fas fa-brain"></i> NEURAL HONEYPOT
                 </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav ml-auto">
                         <li class="nav-item">
@@ -229,7 +232,7 @@
     </footer>
 
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
@@ -238,8 +241,24 @@
         let map;
         let markers = [];
         let threatData = [];
+
+        let gridOverlayLayer = null;
         let heatmapLayer = null;
+        let heatmapActive = false;
+
+        let threatCircleLayer = null;
         let threatLayerActive = false;
+
+        function parseAttackTime(value) {
+            if (value === null || value === undefined) return null;
+            if (typeof value === 'number') {
+                const ms = value < 10_000_000_000 ? value * 1000 : value;
+                const d = new Date(ms);
+                return isNaN(d.getTime()) ? null : d;
+            }
+            const d = new Date(value);
+            return isNaN(d.getTime()) ? null : d;
+        }
 
         // Initialize the map
         function initMap() {
@@ -283,6 +302,7 @@
             }
             
             gridLayer.addTo(map);
+            gridOverlayLayer = gridLayer;
         }
 
         // Load initial data
@@ -304,6 +324,10 @@
             markers.forEach(marker => map.removeLayer(marker));
             markers = [];
 
+            if (threatLayerActive) {
+                return;
+            }
+
             // Add new markers
             threatData.forEach(attack => {
                 if (attack.geolocation && attack.geolocation !== 'N/A') {
@@ -318,6 +342,110 @@
             });
         }
 
+        function getThreatStyle(attackType) {
+            if (attackType === 'ZeroDay') {
+                return { color: 'rgba(255, 68, 68, 0.55)', fill: 'rgba(255, 68, 68, 0.18)' };
+            }
+            if (['DoS', 'R2L', 'U2R', 'Probe'].includes(attackType)) {
+                return { color: 'rgba(255, 170, 0, 0.55)', fill: 'rgba(255, 170, 0, 0.16)' };
+            }
+            return { color: 'rgba(0, 255, 255, 0.50)', fill: 'rgba(0, 255, 255, 0.12)' };
+        }
+
+        function updateThreatLayer() {
+            if (!threatLayerActive) {
+                if (threatCircleLayer) {
+                    map.removeLayer(threatCircleLayer);
+                    threatCircleLayer = null;
+                }
+                updateMapMarkers();
+                return;
+            }
+
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            if (threatCircleLayer) {
+                map.removeLayer(threatCircleLayer);
+            }
+            threatCircleLayer = L.layerGroup();
+
+            threatData.forEach(attack => {
+                if (attack.geolocation && attack.geolocation !== 'N/A') {
+                    const [lat, lng] = attack.geolocation.split(',').map(coord => parseFloat(coord.trim()));
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        const attackType = attack.ml_attack_type || attack.category || 'Normal';
+                        const s = getThreatStyle(attackType);
+                        const circle = L.circleMarker([lat, lng], {
+                            radius: attackType === 'ZeroDay' ? 14 : (['DoS', 'R2L', 'U2R', 'Probe'].includes(attackType) ? 10 : 7),
+                            color: s.color,
+                            weight: 2,
+                            fillColor: s.fill,
+                            fillOpacity: 1
+                        });
+                        circle.bindTooltip(`${attack.ip} | ${attackType}`, { direction: 'top', opacity: 0.9 });
+                        circle.addTo(threatCircleLayer);
+                    }
+                }
+            });
+
+            threatCircleLayer.addTo(map);
+        }
+
+        function buildHeatmapBins() {
+            const bins = new Map();
+
+            threatData.forEach(attack => {
+                if (!attack.geolocation || attack.geolocation === 'N/A') return;
+                const [lat, lng] = attack.geolocation.split(',').map(coord => parseFloat(coord.trim()));
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                const binLat = Math.round(lat / 5) * 5;
+                const binLng = Math.round(lng / 5) * 5;
+                const key = `${binLat},${binLng}`;
+                bins.set(key, (bins.get(key) || 0) + 1);
+            });
+
+            return bins;
+        }
+
+        function updateHeatmapLayer() {
+            if (!heatmapActive) {
+                if (heatmapLayer) {
+                    map.removeLayer(heatmapLayer);
+                    heatmapLayer = null;
+                }
+                return;
+            }
+
+            if (heatmapLayer) {
+                map.removeLayer(heatmapLayer);
+            }
+
+            heatmapLayer = L.layerGroup();
+            const bins = buildHeatmapBins();
+
+            const max = Math.max(1, ...Array.from(bins.values()));
+            bins.forEach((count, key) => {
+                const [latStr, lngStr] = key.split(',');
+                const lat = parseFloat(latStr);
+                const lng = parseFloat(lngStr);
+                const intensity = count / max;
+
+                const circle = L.circle([lat, lng], {
+                    radius: 150000 + 450000 * Math.sqrt(intensity),
+                    color: 'rgba(0, 255, 255, 0.35)',
+                    weight: 1,
+                    fillColor: 'rgba(0, 255, 255, 0.12)',
+                    fillOpacity: 1
+                });
+                circle.bindTooltip(`${count} events`, { direction: 'center', opacity: 0.85 });
+                circle.addTo(heatmapLayer);
+            });
+
+            heatmapLayer.addTo(map);
+        }
+
         // Create threat marker with appropriate styling
         function createThreatMarker(lat, lng, attack) {
             const attackType = attack.ml_attack_type || attack.category || 'Normal';
@@ -330,15 +458,16 @@
                     <strong>IP:</strong> ${attack.ip}<br>
                     <strong>Service:</strong> ${attack.service}<br>
                     <strong>Category:</strong> ${attackType}<br>
-                    <strong>Timestamp:</strong> ${attack.timestamp}<br>
+                    <strong>Timestamp:</strong> ${(parseAttackTime(attack.timestamp) || new Date()).toLocaleString()}<br>
                 </div>
             `;
 
             // Determine marker type based on threat level
-            if (attackType === 'ZeroDay') {
+            const t = (attackType || 'Normal').toString().toLowerCase();
+            if (attackType === 'ZeroDay' || t.includes('zero')) {
                 markerClass += ' critical';
                 popupContent = popupContent.replace('THREAT ALERT', 'ZERO-DAY ALERT');
-            } else if (['DoS', 'R2L', 'U2R', 'Probe'].includes(attackType)) {
+            } else if (attackType !== 'Normal') {
                 markerClass += ' warning';
                 popupContent = popupContent.replace('THREAT ALERT', 'HIGH THREAT');
             } else {
@@ -364,10 +493,11 @@
         function updateStatistics() {
             const activeAttacks = threatData.length;
             const uniqueSources = new Set(threatData.map(a => a.ip)).size;
-            const criticalAlerts = threatData.filter(a => 
-                ['DoS', 'R2L', 'U2R', 'ZeroDay', 'Probe'].includes(a.ml_attack_type || a.category)
-            ).length;
-            const zeroDayCount = threatData.filter(a => (a.ml_attack_type || a.category) === 'ZeroDay').length;
+            const criticalAlerts = threatData.filter(a => (a.ml_attack_type || a.category || 'Normal') !== 'Normal').length;
+            const zeroDayCount = threatData.filter(a => {
+                const tt = (a.ml_attack_type || a.category || '').toString().toLowerCase();
+                return tt.includes('zero');
+            }).length;
 
             document.getElementById('active-attacks').textContent = activeAttacks;
             document.getElementById('unique-sources').textContent = uniqueSources;
@@ -407,7 +537,7 @@
                         <i class="fas fa-network-wired"></i> ${attack.ip}
                     </div>
                     <div style="font-size: 0.8rem; color: var(--accent-purple);">
-                        ${attack.service} | ${new Date(attack.timestamp).toLocaleTimeString()}
+                        ${attack.service} | ${(parseAttackTime(attack.timestamp) || new Date()).toLocaleTimeString()}
                     </div>
                 </div>`
             ).join('');
@@ -432,13 +562,12 @@
         // Map control functions
         function toggleThreatLayer() {
             threatLayerActive = !threatLayerActive;
-            // Implementation for threat layer visualization
-            console.log('Threat layer:', threatLayerActive ? 'ON' : 'OFF');
+            updateThreatLayer();
         }
 
         function toggleHeatmap() {
-            // Implementation for heatmap visualization
-            console.log('Heatmap toggled');
+            heatmapActive = !heatmapActive;
+            updateHeatmapLayer();
         }
 
         function centerMap() {
@@ -455,6 +584,8 @@
         socket.on('new_attack', function(attack_data) {
             threatData.push(attack_data);
             updateMapMarkers();
+            updateThreatLayer();
+            updateHeatmapLayer();
             updateStatistics();
             updateIntelligencePanel();
         });
@@ -477,6 +608,8 @@
             }
 
             updateMapMarkers();
+            updateThreatLayer();
+            updateHeatmapLayer();
             updateStatistics();
             updateIntelligencePanel();
         });

@@ -9,10 +9,10 @@
     --accent-red: #ff4444;
     --accent-orange: #ffaa00;
     --accent-green: #00ff88;
-    --grid-color: rgba(0, 255, 255, 0.1);
+    --grid-color: rgba(0, 255, 255, 0.05);
     --card-bg: rgba(20, 20, 30, 0.7);
-    --glow-cyan: 0 0 10px var(--accent-cyan), 0 0 20px var(--accent-cyan);
-    --glow-purple: 0 0 10px var(--accent-purple), 0 0 20px var(--accent-purple);
+    --glow-cyan: 0 0 4px rgba(0, 255, 255, 0.35), 0 0 10px rgba(0, 255, 255, 0.15);
+    --glow-purple: 0 0 4px rgba(187, 134, 252, 0.35), 0 0 10px rgba(187, 134, 252, 0.15);
 }
 
 * {
@@ -47,7 +47,7 @@ body::before {
         linear-gradient(0deg, transparent 49%, var(--grid-color) 50%, transparent 51%);
     background-size: 30px 30px;
     z-index: -1;
-    animation: gridMove 20s linear infinite;
+    animation: gridMove 60s linear infinite;
 }
 
 @keyframes gridMove {
@@ -58,7 +58,7 @@ body::before {
 /* Glowing Text Effects */
 .glow-text {
     text-shadow: var(--glow-cyan);
-    animation: textGlow 3s ease-in-out infinite alternate;
+    animation: none;
 }
 
 @keyframes textGlow {
@@ -68,7 +68,7 @@ body::before {
 
 .glow-text-purple {
     text-shadow: var(--glow-purple);
-    animation: textGlowPurple 3s ease-in-out infinite alternate;
+    animation: none;
 }
 
 @keyframes textGlowPurple {
@@ -81,7 +81,7 @@ body::before {
     background: linear-gradient(90deg, rgba(10, 10, 15, 0.9) 0%, rgba(20, 20, 30, 0.9) 100%);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--accent-cyan);
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.12);
     position: sticky;
     top: 0;
     z-index: 1000;
@@ -99,7 +99,7 @@ body::before {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    text-shadow: var(--glow-cyan);
+    text-shadow: none;
     letter-spacing: 2px;
 }
 
@@ -119,7 +119,7 @@ body::before {
 .nav-link:hover {
     color: var(--accent-purple) !important;
     background: rgba(187, 134, 252, 0.1);
-    box-shadow: 0 0 15px rgba(187, 134, 252, 0.3);
+    box-shadow: 0 0 10px rgba(187, 134, 252, 0.15);
     transform: translateY(-2px);
 }
 
@@ -151,9 +151,9 @@ body::before {
     border-radius: 12px;
     padding: 2rem;
     margin: 1.5rem 0;
-    box-shadow: 
-        0 0 20px rgba(0, 255, 255, 0.1),
-        inset 0 0 20px rgba(0, 255, 255, 0.05);
+    box-shadow:
+        0 0 12px rgba(0, 255, 255, 0.06),
+        inset 0 0 12px rgba(0, 255, 255, 0.03);
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
     position: relative;
@@ -179,8 +179,8 @@ body::before {
 .cyber-card:hover {
     transform: translateY(-5px);
     box-shadow: 
-        0 10px 30px rgba(0, 255, 255, 0.3),
-        inset 0 0 30px rgba(0, 255, 255, 0.1);
+        0 10px 26px rgba(0, 255, 255, 0.16),
+        inset 0 0 18px rgba(0, 255, 255, 0.06);
     border-color: var(--accent-cyan);
 }
 
@@ -189,7 +189,7 @@ body::before {
     font-family: 'Orbitron', sans-serif;
     font-weight: 700;
     color: var(--accent-cyan);
-    text-shadow: var(--glow-cyan);
+    text-shadow: none;
     margin-bottom: 1.5rem;
     position: relative;
     display: inline-block;
@@ -254,7 +254,7 @@ body::before {
 
 .metric-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 10px 25px rgba(0, 255, 255, 0.3);
+    box-shadow: 0 10px 20px rgba(0, 255, 255, 0.16);
     border-color: var(--accent-cyan);
 }
 
@@ -263,7 +263,7 @@ body::before {
     font-size: 2.5rem;
     font-weight: 700;
     color: var(--accent-cyan);
-    text-shadow: var(--glow-cyan);
+    text-shadow: none;
     margin: 0.5rem 0;
 }
 
@@ -361,7 +361,7 @@ body::before {
     background: rgba(187, 134, 252, 0.2);
     color: var(--accent-purple);
     border: 1px solid var(--accent-purple);
-    animation: pulse 2s infinite;
+    animation: none;
 }
 
 @keyframes pulse {
@@ -375,7 +375,7 @@ body::before {
     height: 600px;
     border-radius: 10px;
     border: 1px solid rgba(0, 255, 255, 0.3);
-    box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.12);
     background: var(--card-bg);
 }
 
@@ -398,7 +398,7 @@ body::before {
     padding: 1.5rem;
     margin: 1.5rem 0;
     border: 1px solid rgba(0, 255, 255, 0.2);
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+    box-shadow: 0 0 12px rgba(0, 255, 255, 0.06);
 }
 
 .chart-title {
@@ -443,7 +443,7 @@ body::before {
 
 .cyber-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0, 255, 255, 0.4);
+    box-shadow: 0 5px 12px rgba(0, 255, 255, 0.22);
 }
 
 .cyber-btn::after {
@@ -528,9 +528,9 @@ body::before {
     left: -10px;
     right: -10px;
     bottom: -10px;
-    border: 2px solid var(--accent-cyan);
+    border: 1px solid rgba(0, 255, 255, 0.35);
     border-radius: 50%;
-    animation: pulse-ring 2s infinite;
+    animation: none;
 }
 
 @keyframes pulse-ring {

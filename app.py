@@ -1,9 +1,15 @@
 from flask import Flask, render_template, jsonify, request, redirect, url_for, abort, make_response
 from flask_socketio import SocketIO
+import os
 import sqlite3
 import secrets
 from datetime import datetime, timezone
 from typing import Any
+
+try:
+    import ipinfo
+except Exception:
+    ipinfo = None
 # Import shared EventBus instance
 from shared_bus import bus
 from mitigation import apply_rl_action
@@ -12,6 +18,9 @@ app = Flask(__name__)
 socketio = SocketIO(app)
 
 DATABASE = 'honeypot.db'
+
+_IPINFO_TOKEN = os.getenv('IPINFO_TOKEN')
+_IPINFO_HANDLER = ipinfo.getHandler(_IPINFO_TOKEN) if ipinfo and _IPINFO_TOKEN else None
 
 
 def ensure_attacks_table(conn: sqlite3.Connection) -> None:
@@ -72,6 +81,24 @@ def get_db():
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def resolve_geolocation(ip: str) -> str:
+    """Return a lat,lon string suitable for dashboard display."""
+    if ip in {'127.0.0.1', '::1', 'localhost'}:
+        return '13.0878,80.2785'
+    if _IPINFO_HANDLER:
+        try:
+            details = _IPINFO_HANDLER.getDetails(ip)
+            if getattr(details, 'lat', None) and getattr(details, 'lon', None):
+                return f"{details.lat},{details.lon}"
+        except Exception:
+            pass
+    return '13.0878,80.2785'
+
+
+def get_client_ip() -> str:
+    return request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown').split(',')[0].strip()
 
 
 def ensure_webapp_tables(conn: sqlite3.Connection) -> None:
@@ -201,6 +228,64 @@ def analysis():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Attack Lab (UI-driven simulation)
+
+@app.route('/lab')
+def attack_lab():
+    return render_template('attack_lab.html')
+
+
+@app.route('/lab/http', methods=['GET', 'POST'])
+def attack_lab_http():
+    if request.method == 'GET':
+        return render_template('lab_http.html', submitted=False)
+
+    ip = get_client_ip()
+    geolocation = resolve_geolocation(ip)
+    method = (request.form.get('method') or 'GET').strip().upper()
+    path = (request.form.get('path') or '/').strip()
+    body = (request.form.get('body') or '').strip()
+    payload = f"{method} {path} {body}".strip()
+
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'HTTP', payload, 'Simulated HTTP Probe')
+    emit_bus_for_attack(attack_id, ip, 'http', payload)
+    return render_template('lab_http.html', submitted=True, method=method, path=path, body=body)
+
+
+@app.route('/lab/ssh', methods=['GET', 'POST'])
+def attack_lab_ssh():
+    if request.method == 'GET':
+        return render_template('lab_ssh.html', submitted=False)
+
+    ip = get_client_ip()
+    geolocation = resolve_geolocation(ip)
+    username = (request.form.get('username') or 'root').strip()
+    password = (request.form.get('password') or '').strip()
+    commands = (request.form.get('commands') or '').strip()
+    payload = f"user={username} password={password} cmds={commands}".strip()
+
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'SSH', payload, 'Simulated SSH Session')
+    emit_bus_for_attack(attack_id, ip, 'ssh', payload)
+    return render_template('lab_ssh.html', submitted=True, username=username, password=password, commands=commands)
+
+
+@app.route('/lab/scan', methods=['GET', 'POST'])
+def attack_lab_scan():
+    if request.method == 'GET':
+        return render_template('lab_scan.html', submitted=False)
+
+    ip = get_client_ip()
+    geolocation = resolve_geolocation(ip)
+    ports = (request.form.get('ports') or '22,80,443,8080').strip()
+    rate = (request.form.get('rate') or 'fast').strip().lower()
+    payload = f"scan ports={ports} rate={rate}"
+
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'SCAN', payload, 'Simulated Port Scan')
+    emit_bus_for_attack(attack_id, ip, 'scan', payload)
+    return render_template('lab_scan.html', submitted=True, ports=ports, rate=rate)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Decoy Web App + Honeytokens
 
 @app.route('/webapp')
@@ -257,7 +342,8 @@ def webapp_reset_token(token: str):
             mark_honeytoken_used(conn, token, ip)
             add_audit(conn, ip, 'reset_link_opened', 'Password reset link opened')
 
-            attack_id = log_attack(ip, None, utc_now_iso(), 'WEBAPP', f'Reset link opened token={token}', 'Honeytoken Used')
+            geolocation = resolve_geolocation(ip)
+            attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP', f'Reset link opened token={token}', 'Honeytoken Used')
             emit_bus_for_attack(attack_id, ip, 'webapp', f'Reset link opened token={token}')
 
         if request.method == 'GET':
@@ -325,8 +411,8 @@ def api_profile():
             if not row['used_at']:
                 mark_honeytoken_used(conn, raw_token, ip)
             add_audit(conn, ip, 'api_key_used', 'Honeytoken API key used on /api/v1/profile')
-
-            attack_id = log_attack(ip, None, utc_now_iso(), 'WEBAPP_API', f'X-API-Key={api_key}', 'Honeytoken Used')
+            geolocation = resolve_geolocation(ip)
+            attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP_API', f'X-API-Key={api_key}', 'Honeytoken Used')
             emit_bus_for_attack(attack_id, ip, 'http', f'API key used token={raw_token}')
 
             return jsonify({
@@ -336,7 +422,8 @@ def api_profile():
             })
 
         add_audit(conn, ip, 'api_key_invalid', 'Invalid API key used on /api/v1/profile')
-        attack_id = log_attack(ip, None, utc_now_iso(), 'WEBAPP_API', f'Invalid key={api_key}', 'API Probe')
+        geolocation = resolve_geolocation(ip)
+        attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP_API', f'Invalid key={api_key}', 'API Probe')
         emit_bus_for_attack(attack_id, ip, 'http', f'Invalid API key used')
         return jsonify({'ok': False, 'error': 'invalid_api_key'}), 401
     finally:
@@ -368,8 +455,8 @@ def honey_pixel(token: str):
             if not row['used_at']:
                 mark_honeytoken_used(conn, token, ip)
             add_audit(conn, ip, 'pixel_fired', 'Honeytoken tracking pixel requested')
-
-            attack_id = log_attack(ip, None, utc_now_iso(), 'WEBAPP', f'Pixel requested token={token}', 'Honeytoken Used')
+            geolocation = resolve_geolocation(ip)
+            attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP', f'Pixel requested token={token}', 'Honeytoken Used')
             emit_bus_for_attack(attack_id, ip, 'http', f'Pixel requested token={token}')
     finally:
         conn.close()
@@ -437,8 +524,8 @@ def log_attack(ip, geolocation, timestamp, service, payload, category):
 
 def handle_enriched_event(enriched_event):
     # Extract ML and RL results
-    ml_result = enriched_event.get('ml', {})
-    rl_result = enriched_event.get('rl', {})
+    ml_result = dict(enriched_event.get('ml', {}) or {})
+    rl_result = dict(enriched_event.get('rl', {}) or {})
     
     # Ensure all values are JSON serializable.
     # Socket.IO uses JSON encoding; numpy/scikit-learn types (e.g. numpy.bool_)
@@ -481,8 +568,55 @@ def handle_enriched_event(enriched_event):
     # Send enriched event to dashboard
     attack_id = enriched_event.get('attack_id')
 
+    # Enforce a strict safety response if RL marks its own action as not ideal.
+    feedback = rl_result.get('feedback') or {}
+    enforced_action = feedback.get('enforced_action')
+    if enforced_action:
+        rl_result['action'] = enforced_action
+        try:
+            ip = str(enriched_event.get('src_ip', 'unknown'))
+            pol = apply_rl_action(ip, enforced_action)
+            socketio.emit('action_applied', {
+                'ip': ip,
+                'mode': pol.mode,
+                'delay_seconds': pol.delay_seconds,
+                'expires_at': pol.expires_at,
+                'rl_action': enforced_action,
+                'id': attack_id,
+            })
+        except Exception:
+            pass
+
     # Persist enrichment back into DB if we can correlate.
     if attack_id is not None:
+        # Novelty rule: if this exact payload already exists in DB (same service/category),
+        # then it is NOT an anomaly. If it has never been seen, it IS an anomaly.
+        try:
+            conn = get_db()
+            try:
+                ensure_attacks_table(conn)
+                row = conn.execute(
+                    'SELECT service, payload, category FROM attacks WHERE id=?',
+                    (int(attack_id),),
+                ).fetchone()
+
+                if row:
+                    seen = conn.execute(
+                        'SELECT 1 FROM attacks WHERE service=? AND payload=? AND category=? AND id!=? LIMIT 1',
+                        (row['service'], row['payload'], row['category'], int(attack_id)),
+                    ).fetchone() is not None
+
+                    if seen:
+                        ml_result['is_anomaly'] = False
+                        ml_result['zero_day'] = False
+                    else:
+                        ml_result['is_anomaly'] = True
+            finally:
+                conn.close()
+        except Exception:
+            # If novelty check fails, fall back to ML values.
+            pass
+
         try:
             conn = get_db()
             try:

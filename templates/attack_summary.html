@@ -40,6 +40,11 @@
                             </a>
                         </li>
                         <li class="nav-item">
+                            <a class="nav-link" href="/lab">
+                                <i class="fas fa-flask"></i> ATTACK LAB
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a class="nav-link" href="/webapp">
                                 <i class="fas fa-user-shield"></i> DECOY WEB APP
                             </a>
@@ -308,7 +313,10 @@
                     <td><span class="status-indicator ${statusClass}">${attackType}</span></td>
                     <td>${confidence}</td>
                     <td><span class="status-indicator ${isAnomaly ? 'status-warning' : 'status-normal'}">${isAnomaly ? 'Yes' : 'No'}</span></td>
-                    <td><span class="cyber-text">${attack.rl_action || 'N/A'}</span></td>
+                    <td>
+                        <div class="cyber-text">${attack.rl_action || 'N/A'}</div>
+                        ${attack.rl_feedback_status ? `<div class="cyber-text" style="font-size: 0.85rem; opacity: 0.8;">${attack.rl_feedback_status === 'not_ideal' ? 'Not ideal → ' + (attack.rl_feedback_suggested || '') : 'OK'}</div>` : ''}
+                    </td>
                     <td><span class="cyber-text">${attack.rl_des !== null && attack.rl_des !== undefined ? attack.rl_des : 'N/A'}</span></td>
                     <td>
                         <button class="cyber-btn btn-sm mr-1" onclick="viewDetails('${attack.id}')" title="View details">
@@ -451,6 +459,10 @@
                 existing.rl_q_value = rl.q_value;
                 existing.rl_aggressiveness = rl.aggressiveness;
                 existing.rl_time_bucket = rl.time_bucket;
+                if (rl.feedback) {
+                    existing.rl_feedback_status = rl.feedback.status;
+                    existing.rl_feedback_suggested = rl.feedback.suggested;
+                }
             }
 
             updateTable();

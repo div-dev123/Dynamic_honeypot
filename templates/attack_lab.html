@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Acme Console | Internal Web App</title>
+    <title>Attack Lab | Neural Honeypot</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="/static/style.css">
@@ -15,7 +15,7 @@
                 <a class="navbar-brand glow-text" href="/">
                     <i class="fas fa-brain"></i> NEURAL HONEYPOT
                 </a>
-                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
                     <span class="navbar-toggler-icon"></span>
                 </button>
                 <div class="collapse navbar-collapse" id="navbarNav">
@@ -24,8 +24,8 @@
                         <li class="nav-item"><a class="nav-link" href="/attack_summary"><i class="fas fa-shield-alt"></i> THREAT DASHBOARD</a></li>
                         <li class="nav-item"><a class="nav-link" href="/map"><i class="fas fa-globe"></i> THREAT MAP</a></li>
                         <li class="nav-item"><a class="nav-link" href="/analysis"><i class="fas fa-chart-line"></i> ANALYSIS</a></li>
-                        <li class="nav-item"><a class="nav-link" href="/lab"><i class="fas fa-flask"></i> ATTACK LAB</a></li>
-                        <li class="nav-item"><a class="nav-link active" href="/webapp"><i class="fas fa-user-shield"></i> DECOY WEB APP</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/webapp"><i class="fas fa-user-shield"></i> DECOY WEB APP</a></li>
+                        <li class="nav-item"><a class="nav-link active" href="/lab"><i class="fas fa-flask"></i> ATTACK LAB</a></li>
                     </ul>
                 </div>
             </nav>
@@ -34,45 +34,38 @@
 
     <section class="cyber-container">
         <div class="cyber-card">
-            <h1 class="cyber-heading glow-text"><i class="fas fa-building"></i> ACME INTERNAL CONSOLE</h1>
-            <p class="cyber-text">This is a decoy internal web app designed to attract attacker interaction and safely generate telemetry (audit logs + honeytokens).</p>
+            <h1 class="cyber-heading glow-text"><i class="fas fa-flask"></i> ATTACK LAB</h1>
+            <p class="cyber-text">Simulate attacks from the browser. Each action writes a real attack record and triggers ML/RL enrichment.</p>
 
             <div class="row">
                 <div class="col-md-4">
                     <div class="cyber-card">
-                        <h3 class="cyber-subheading"><i class="fas fa-key"></i> Password Reset</h3>
-                        <p class="cyber-text">Multi-step reset flow that issues a tracked reset link.</p>
-                        <a class="cyber-btn" href="/webapp/password-reset"><i class="fas fa-arrow-right"></i> OPEN</a>
+                        <h3 class="cyber-subheading"><i class="fas fa-globe"></i> HTTP Probe</h3>
+                        <p class="cyber-text">Simulate web probes like SQLi or path traversal.</p>
+                        <a class="cyber-btn" href="/lab/http"><i class="fas fa-arrow-right"></i> OPEN</a>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="cyber-card">
-                        <h3 class="cyber-subheading"><i class="fas fa-code"></i> API Keys</h3>
-                        <p class="cyber-text">Generate API keys (honeytokens). Using them triggers an alert.</p>
-                        <a class="cyber-btn" href="/webapp/api-keys"><i class="fas fa-arrow-right"></i> OPEN</a>
+                        <h3 class="cyber-subheading"><i class="fas fa-terminal"></i> SSH Session</h3>
+                        <p class="cyber-text">Enter commands in a fake terminal to generate SSH events.</p>
+                        <a class="cyber-btn" href="/lab/ssh"><i class="fas fa-arrow-right"></i> OPEN</a>
                     </div>
                 </div>
                 <div class="col-md-4">
                     <div class="cyber-card">
-                        <h3 class="cyber-subheading"><i class="fas fa-clipboard-list"></i> Audit Logs</h3>
-                        <p class="cyber-text">View audit trail for activity inside the decoy app.</p>
-                        <a class="cyber-btn" href="/webapp/audit"><i class="fas fa-arrow-right"></i> OPEN</a>
+                        <h3 class="cyber-subheading"><i class="fas fa-network-wired"></i> Port Scan</h3>
+                        <p class="cyber-text">Simulate a scan against common ports.</p>
+                        <a class="cyber-btn" href="/lab/scan"><i class="fas fa-arrow-right"></i> OPEN</a>
                     </div>
                 </div>
-            </div>
-
-            <hr style="border-color: rgba(255,255,255,0.1);" />
-            <h3 class="cyber-subheading"><i class="fas fa-satellite-dish"></i> Honeytoken (Tracking Pixel)</h3>
-            <p class="cyber-text">If this URL is requested, the system logs a <b>Honeytoken Used</b> event and it appears on the Threat Dashboard:</p>
-            <div class="terminal-text">
-                <div class="cyber-text">GET /honey/{{ pixel_token }}.png</div>
             </div>
         </div>
     </section>
 
     <footer class="cyber-footer">
         <div class="cyber-container">
-            <p class="cyber-text"><i class="fas fa-user-shield"></i> Decoy Web App</p>
+            <p class="cyber-text"><i class="fas fa-flask"></i> Attack Lab</p>
         </div>
     </footer>
 

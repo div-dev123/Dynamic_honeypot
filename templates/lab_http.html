@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP Probe Lab | Neural Honeypot</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="cyber-header">
+        <div class="cyber-container">
+            <nav class="navbar navbar-expand-lg navbar-dark cyber-navbar">
+                <a class="navbar-brand glow-text" href="/">
+                    <i class="fas fa-brain"></i> NEURAL HONEYPOT
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item"><a class="nav-link" href="/"><i class="fas fa-home"></i> HOME</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/attack_summary"><i class="fas fa-shield-alt"></i> THREAT DASHBOARD</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/map"><i class="fas fa-globe"></i> THREAT MAP</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/analysis"><i class="fas fa-chart-line"></i> ANALYSIS</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/webapp"><i class="fas fa-user-shield"></i> DECOY WEB APP</a></li>
+                        <li class="nav-item"><a class="nav-link active" href="/lab"><i class="fas fa-flask"></i> ATTACK LAB</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <section class="cyber-container">
+        <div class="cyber-card">
+            <h1 class="cyber-heading glow-text"><i class="fas fa-globe"></i> HTTP PROBE LAB</h1>
+            <p class="cyber-text">Create a simulated web probe (SQLi, traversal, admin login, etc.).</p>
+
+            {% if submitted %}
+            <div class="alert alert-success" role="alert">
+                Simulated probe logged. Check the Threat Dashboard for the new event.
+            </div>
+            {% endif %}
+
+            <form method="post">
+                <div class="form-row">
+                    <div class="form-group col-md-3">
+                        <label class="cyber-text">Method</label>
+                        <select class="form-control" name="method">
+                            <option {% if method == 'GET' %}selected{% endif %}>GET</option>
+                            <option {% if method == 'POST' %}selected{% endif %}>POST</option>
+                            <option {% if method == 'PUT' %}selected{% endif %}>PUT</option>
+                            <option {% if method == 'DELETE' %}selected{% endif %}>DELETE</option>
+                        </select>
+                    </div>
+                    <div class="form-group col-md-9">
+                        <label class="cyber-text">Path</label>
+                        <input type="text" class="form-control" name="path" value="{{ path or '/admin?user=admin%27%20OR%201=1--' }}" />
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="cyber-text">Body (optional)</label>
+                    <textarea class="form-control" name="body" rows="4">{{ body or '' }}</textarea>
+                </div>
+                <button class="cyber-btn" type="submit"><i class="fas fa-play"></i> LOG PROBE</button>
+                <a class="cyber-btn ml-2" href="/lab"><i class="fas fa-arrow-left"></i> BACK</a>
+            </form>
+        </div>
+    </section>
+
+    <footer class="cyber-footer">
+        <div class="cyber-container">
+            <p class="cyber-text"><i class="fas fa-flask"></i> Attack Lab</p>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+</body>
+</html>

@@ -5,13 +5,14 @@ import time
 # Import shared EventBus instance
 from shared_bus import bus
 
-# Configure logging for network traffic
+# Configure logging for network traffic (stdout only; no file writes)
 traffic_logger = logging.getLogger('network_traffic')
-traffic_logger.setLevel(logging.DEBUG)
-fh = logging.FileHandler('network_traffic.log')
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-fh.setFormatter(formatter)
-traffic_logger.addHandler(fh)
+traffic_logger.setLevel(logging.WARNING)
+if not traffic_logger.handlers:
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    traffic_logger.addHandler(handler)
 
 # Data structures to store traffic data
 traffic_data = defaultdict(int)

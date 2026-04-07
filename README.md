@@ -91,7 +91,7 @@ Open your browser to: `http://localhost:5001`
 - Captures and analyzes network packets using Scapy
 - Detects port scanning and DoS attacks
 - Triggers honeypot service activation
-- Logs network traffic to `network_traffic.log`
+- Logs to console output (no log file)
 
 ### 2. Honeypot Engine (`honeypot_engine.py`)
 - Simulates vulnerable services:
@@ -101,7 +101,7 @@ Open your browser to: `http://localhost:5001`
   - **FTP** (default port 2121): File transfer protocol simulation
   - **Telnet** (default port 2323): Command-line interface simulation
   - **SMTP** (default port 2525): Email server simulation
-- Logs all interactions with attacker details
+- Logs interactions to console (no log file)
 - Provides geolocation data for each attack
 
 Note: Ports are configurable via environment variables like `HONEYPOT_FTP_PORT`, `HONEYPOT_TELNET_PORT`, `HONEYPOT_SMTP_PORT`.
@@ -182,9 +182,8 @@ python3 insights.py
 python3 view.py
 ```
 
-### Log Files
-- `honeypot.log` - Attack interaction logs
-- `network_traffic.log` - Network packet analysis
+### Logs
+- Console output - Runtime logs (services, sniffer, and detection)
 - `honeypot.db` - Structured attack data
 
 ## 📈 Dashboard Features
@@ -234,6 +233,9 @@ To smoke-test the decoy web app honeytoken paths (API key + reset link + pixel):
 ```bash
 python3 tools/smoke_honeytokens.py
 ```
+
+Prefer no-terminal demos? Use the web UI Attack Lab:
+- `http://localhost:5001/lab` (HTTP probe, SSH session, port scan)
 
 ## 🎓 Teacher Demo (5–10 minutes)
 
@@ -343,8 +345,6 @@ SERVICES = {
 ├── Dockerfile.honeypot   # Honeypot container
 ├── Dockerfile.attacker   # Attacker testing container
 ├── honeypot.db           # Attack database
-├── honeypot.log          # Attack logs
-├── network_traffic.log   # Network logs
 └── README.md
 ```
 

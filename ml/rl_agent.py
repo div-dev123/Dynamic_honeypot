@@ -16,6 +16,10 @@ class HoneypotRLAgent:
         self.aggressiveness = data['aggressiveness']
         self.time_buckets   = data['time_buckets']
 
+        self.model_path = model_path
+        self.alpha = 0.15
+        self.gamma = 0.85
+
         # Track active sessions
         self.sessions = {}   # ip → session info
 
@@ -87,15 +91,19 @@ class HoneypotRLAgent:
         des = self._compute_des(session)
         session['des_history'].append(des)
 
+        feedback = self._evaluate_and_learn(state, action_idx, attack_type)
+
         return {
             'action'         : action,
             'action_idx'     : action_idx,
             'q_value'        : round(q_value, 3),
+            'state'          : int(state),
             'attack_type'    : attack_type,
             'aggressiveness' : aggressiveness,
             'time_bucket'    : time_bucket,
             'des'            : round(des, 3),
             'session'        : session,
+            'feedback'       : feedback,
         }
 
     def _compute_des(self, session):
@@ -110,3 +118,63 @@ class HoneypotRLAgent:
 
     def end_session(self, src_ip):
         return self.sessions.pop(src_ip, None)
+
+    def _desired_action_keyword(self, attack_type: str) -> str:
+        t = (attack_type or '').lower()
+        if t in {'dos'}:
+            return 'drop'
+        if t in {'probe'}:
+            return 'deeppacketlog'
+        if t in {'r2l', 'u2r'}:
+            return 'drop'
+        if t in {'zeroday', 'zero-day', 'zero_day'}:
+            return 'tarpit'
+        if t in {'normal'}:
+            return 'deeppacketlog'
+        return 'drop'
+
+    def _evaluate_and_learn(self, state: int, action_idx: int, attack_type: str) -> dict:
+        action = self.actions[action_idx]
+        desired = self._desired_action_keyword(attack_type)
+
+        action_l = (action or '').lower()
+        ok = desired in action_l
+
+        # Reward: correct action +1, incorrect -1
+        reward = 1.0 if ok else -1.0
+
+        enforced_action = None
+        if not ok:
+            enforced_action = 'drop'
+
+        # Q-learning update
+        try:
+            best_next = float(np.max(self.q_table[state]))
+            old = float(self.q_table[state, action_idx])
+            updated = old + self.alpha * (reward + self.gamma * best_next - old)
+            self.q_table[state, action_idx] = updated
+            self._persist()
+        except Exception:
+            pass
+
+        return {
+            'status': 'ok' if ok else 'not_ideal',
+            'suggested': desired,
+            'enforced_action': enforced_action,
+            'reward': reward,
+        }
+
+    def _persist(self) -> None:
+        try:
+            data = {
+                'q_table': self.q_table,
+                'states': self.states,
+                'actions': self.actions,
+                'attack_types': self.attack_types,
+                'aggressiveness': self.aggressiveness,
+                'time_buckets': self.time_buckets,
+            }
+            with open(self.model_path, 'wb') as f:
+                pickle.dump(data, f)
+        except Exception:
+            return

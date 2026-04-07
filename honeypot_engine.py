@@ -15,8 +15,8 @@ from mitigation import get_policy
 # Import shared EventBus instance
 from shared_bus import bus
 
-# Configure logging
-logging.basicConfig(filename='honeypot.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Configure logging (stdout only; no file writes)
+logging.basicConfig(level=logging.WARNING, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # IPinfo API token (prefer environment variable to avoid committing secrets)
 ipinfo_token = os.getenv('IPINFO_TOKEN')
@@ -80,6 +80,8 @@ def _get_session(client_ip: str) -> dict:
                 },
                 'signals': {
                     'suspicion': 0,
+                    'fakedb': False,
+                    'deeppacketlog': False,
                 }
             }
             _SESSIONS[client_ip] = s
@@ -613,6 +615,7 @@ def handle_ssh(client_socket, client_ip):
 
 def handle_mysql(client_socket, client_ip):
     start_time = time.time()
+    session = _get_session(client_ip)
     total_bytes_sent = 0
     total_bytes_received = 0
     failed_logins = 0
@@ -633,14 +636,23 @@ def handle_mysql(client_socket, client_ip):
         total_bytes_received += len(sql_query)
         logging.info(f"MySQL query from {client_ip}: {sql_query}")
 
-        if "SELECT * FROM users" in sql_query:
+        if session.get('signals', {}).get('deeppacketlog'):
+            logging.info(f"Deep packet log: mysql_query={sql_query}")
+
+        if session.get('signals', {}).get('fakedb'):
+            # Fake a successful response to keep the attacker engaged.
             response = b"\x00\x00\x00\x01\x01\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00"
             client_socket.sendall(response)
             total_bytes_sent += len(response)
         else:
-            response = b"Access Denied\x00"
-            client_socket.sendall(response)
-            total_bytes_sent += len(response)
+            if "SELECT * FROM users" in sql_query:
+                response = b"\x00\x00\x00\x01\x01\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00"
+                client_socket.sendall(response)
+                total_bytes_sent += len(response)
+            else:
+                response = b"Access Denied\x00"
+                client_socket.sendall(response)
+                total_bytes_sent += len(response)
 
         log_attack_internal(client_ip, 'MySQL', sql_query, 'Exploitation', 
                           duration=time.time()-start_time, src_bytes=len(sql_query), dst_bytes=len(response), 
@@ -851,6 +863,17 @@ class HoneypotEngine:
                         continue
                     if pol.mode == 'tarpit' and pol.delay_seconds:
                         time.sleep(pol.delay_seconds)
+                    if pol.mode == 'deeppacketlog':
+                        session = _get_session(client_ip)
+                        session['signals']['deeppacketlog'] = True
+                        if pol.delay_seconds:
+                            time.sleep(pol.delay_seconds)
+                        logging.info(f"Deep packet log enabled for {client_ip} on port {port}")
+                    if pol.mode == 'fakedb':
+                        session = _get_session(client_ip)
+                        session['signals']['fakedb'] = True
+                        if pol.delay_seconds:
+                            time.sleep(pol.delay_seconds)
 
                 handler(client_socket, client_ip)
         except Exception as e:

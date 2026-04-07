@@ -19,7 +19,7 @@ from typing import Dict, Optional
 
 @dataclass
 class MitigationPolicy:
-    mode: str  # 'none' | 'drop' | 'tarpit'
+    mode: str  # 'none' | 'drop' | 'tarpit' | 'fakedb' | 'deeppacketlog'
     delay_seconds: float = 0.0
     expires_at: Optional[float] = None
 
@@ -47,7 +47,7 @@ def set_policy(ip: str, mode: str, *, delay_seconds: float = 0.0, ttl_seconds: O
     """Set an in-memory mitigation policy for an IP."""
     if not ip:
         raise ValueError('ip is required')
-    if mode not in {'none', 'drop', 'tarpit'}:
+    if mode not in {'none', 'drop', 'tarpit', 'fakedb', 'deeppacketlog'}:
         raise ValueError(f'unsupported mode: {mode}')
 
     expires_at = None
@@ -88,6 +88,12 @@ def apply_rl_action(ip: str, rl_action: str, *, ttl_seconds: Optional[float] = 9
 
     if any(k in action for k in ['tarpit', 'slow', 'delay', 'throttle']):
         return set_policy(ip, 'tarpit', delay_seconds=1.5, ttl_seconds=ttl_seconds)
+
+    if 'fakedb' in action:
+        return set_policy(ip, 'fakedb', delay_seconds=0.4, ttl_seconds=ttl_seconds)
+
+    if any(k in action for k in ['deeppacketlog', 'deep_packet_log', 'monitor', 'trace']):
+        return set_policy(ip, 'deeppacketlog', delay_seconds=0.2, ttl_seconds=ttl_seconds)
 
     # deep_packet_log / monitor / sandbox → no active mitigation
     return set_policy(ip, 'none', ttl_seconds=ttl_seconds)

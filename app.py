@@ -101,6 +101,234 @@ def get_client_ip() -> str:
     return request.headers.get('X-Forwarded-For', request.remote_addr or 'unknown').split(',')[0].strip()
 
 
+def _lab_action_for(service: str, category: str) -> str:
+    s = str(service or '').lower()
+    c = str(category or '').lower()
+    if s == 'mysql':
+        return 'fakedb'
+    if any(k in c for k in ['sql injection', 'command injection', 'directory traversal']):
+        return 'fakedb'
+    if 'brute' in c:
+        return 'tarpit'
+    if any(k in c for k in ['scan', 'probe', 'recon']):
+        return 'deeppacketlog'
+    if 'malware' in c:
+        return 'drop'
+    if s in {'ssh', 'ftp', 'telnet', 'smtp'}:
+        return 'deeppacketlog'
+    return 'deeppacketlog'
+
+
+def _quick_rl_action(service: str, category: str) -> str:
+    # Fast mapping for immediate dashboard display (final RL arrives later).
+    s = str(service or '').lower()
+    c = str(category or '').lower()
+    if s == 'mysql' or any(k in c for k in ['sql injection', 'command injection', 'directory traversal']):
+        return 'fakedb'
+    if any(k in c for k in ['scan', 'probe', 'recon']):
+        return 'deeppacketlog'
+    if 'brute' in c:
+        return 'tarpit'
+    if 'malware' in c:
+        return 'drop'
+    if s in {'ssh', 'ftp', 'telnet', 'smtp'}:
+        return 'deeppacketlog'
+    return 'deeppacketlog'
+
+
+def _quick_des(service: str, category: str) -> float:
+    action = _quick_rl_action(service, category)
+    if action == 'drop':
+        return 0.92
+    if action == 'tarpit':
+        return 0.78
+    if action == 'fakedb':
+        return 0.64
+    if action == 'deeppacketlog':
+        return 0.52
+    return 0.4
+
+
+def _lab_response_text(mode: str, service: str) -> str:
+    s = str(service or '').lower()
+    if mode == 'drop':
+        return 'Connection reset by peer.'
+    if mode == 'tarpit':
+        return 'Server is slow to respond. Request timed out.'
+    if mode == 'fakedb':
+        if s == 'mysql':
+            return 'Query OK, 2 rows returned.'
+        return '200 OK\n-- fake db dump returned'
+    if mode == 'deeppacketlog':
+        if s == 'smtp':
+            return '250 2.0.0 Ok: queued as 9F2A1'
+        if s == 'ftp':
+            return '226 Transfer complete.'
+        return '200 OK'
+    return '200 OK'
+
+
+def _format_http_response(status: str, headers: list, body: str) -> str:
+    header_block = '\n'.join(headers or [])
+    if header_block:
+        return f"HTTP/1.1 {status}\n{header_block}\n\n{body}".strip()
+    return f"HTTP/1.1 {status}\n\n{body}".strip()
+
+
+def _http_probe_response(method: str, path: str, body: str, mode: str) -> str:
+    if mode == 'drop':
+        return 'Connection reset by peer.'
+    if mode == 'tarpit':
+        return 'Server is slow to respond. Request timed out.'
+
+    method_u = (method or 'GET').strip().upper()
+    path_l = (path or '/').strip().lower()
+    body_l = (body or '').strip().lower()
+
+    status = '200 OK'
+    content_type = 'text/html'
+    response_body = '<html><title>Acme Portal</title><body>Welcome to Acme Portal.</body></html>'
+
+    if method_u not in {'GET', 'POST', 'PUT', 'DELETE'}:
+        status = '405 Method Not Allowed'
+        content_type = 'text/plain'
+        response_body = 'Method not allowed.'
+    elif '/robots.txt' in path_l:
+        content_type = 'text/plain'
+        response_body = 'User-agent: *\nDisallow: /admin\nDisallow: /backup'
+    elif '/wp-login.php' in path_l:
+        content_type = 'text/html'
+        response_body = '<html><title>WordPress</title><body>Login required.</body></html>'
+    elif '/phpmyadmin' in path_l:
+        status = '403 Forbidden'
+        content_type = 'text/plain'
+        response_body = 'Access denied.'
+    elif '../' in path_l or 'etc/passwd' in path_l:
+        content_type = 'text/plain'
+        response_body = 'root:x:0:0:root:/root:/bin/bash\nwww-data:x:33:33:/var/www:/usr/sbin/nologin'
+    elif 'or%201=1' in path_l or ' or 1=1' in path_l or 'union' in path_l:
+        content_type = 'text/plain'
+        response_body = "-- fake db dump\nid | email | role\n1 | admin@acme.internal | admin\n2 | ops@acme.internal | ops\n3 | dev@acme.internal | dev"
+    elif '/admin/login' in path_l and method_u == 'POST':
+        content_type = 'text/plain'
+        if 'username=admin' in body_l and 'password=admin123' in body_l:
+            response_body = 'Welcome, admin.'
+        else:
+            status = '401 Unauthorized'
+            response_body = 'Invalid credentials.'
+    elif '/upload' in path_l and method_u == 'POST':
+        content_type = 'text/plain'
+        if 'file=' in body_l:
+            status = '201 Created'
+            response_body = 'Upload received.'
+        else:
+            status = '400 Bad Request'
+            response_body = 'Missing file payload.'
+    elif method_u in {'PUT', 'DELETE'}:
+        status = '405 Method Not Allowed'
+        content_type = 'text/plain'
+        response_body = 'Method not allowed.'
+    elif method_u != 'GET':
+        content_type = 'text/plain'
+        response_body = 'OK'
+
+    headers = [
+        'Server: nginx/1.18.0',
+        f'Content-Type: {content_type}',
+        'Connection: close',
+    ]
+    return _format_http_response(status, headers, response_body)
+
+
+def _format_scan_results(ports: str) -> str:
+    open_ports = {22, 80, 443, 8080, 2222, 33060, 33061, 2121, 2323, 2525}
+    out = ["PORT     STATE    SERVICE"]
+    items = []
+    for part in (ports or '').split(','):
+        part = part.strip()
+        if not part:
+            continue
+        if '-' in part:
+            start, end = part.split('-', 1)
+            try:
+                start_i = int(start)
+                end_i = int(end)
+            except ValueError:
+                continue
+            items.extend(list(range(start_i, min(end_i, start_i + 50) + 1)))
+        else:
+            try:
+                items.append(int(part))
+            except ValueError:
+                continue
+    for p in items[:30]:
+        state = 'open' if p in open_ports else 'closed'
+        service = 'unknown'
+        if p == 22:
+            service = 'ssh'
+        elif p == 80:
+            service = 'http'
+        elif p == 443:
+            service = 'https'
+        elif p == 8080:
+            service = 'http-proxy'
+        elif p == 2222:
+            service = 'ssh'
+        elif p in {33060, 33061}:
+            service = 'mysql'
+        elif p == 2121:
+            service = 'ftp'
+        elif p == 2323:
+            service = 'telnet'
+        elif p == 2525:
+            service = 'smtp'
+        out.append(f"{p:<8} {state:<8} {service}")
+    return "\n".join(out)
+
+
+def _format_ftp_transcript(username: str, password: str, commands: str) -> str:
+    lines = ["220 FTP Server ready"]
+    lines.append(f"USER {username}")
+    lines.append("331 Password required")
+    lines.append(f"PASS {password}")
+    lines.append("230 Login successful")
+    for cmd in (commands or '').splitlines():
+        c = cmd.strip().upper()
+        if not c:
+            continue
+        if c.startswith('LIST'):
+            lines.append("150 Opening ASCII mode data connection")
+            lines.append("-rw-r--r-- 1 root root  124 Apr 08 12:40 secrets.txt")
+            lines.append("226 Transfer complete")
+        elif c.startswith('RETR'):
+            lines.append("150 Opening BINARY mode data connection")
+            lines.append("226 Transfer complete")
+        elif c.startswith('QUIT'):
+            lines.append("221 Goodbye")
+            break
+        else:
+            lines.append("200 OK")
+    return "\n".join(lines)
+
+
+def _format_smtp_transcript(mail_from: str, rcpt_to: str, data: str) -> str:
+    lines = ["220 mail.acme.internal ESMTP Postfix"]
+    lines.append("EHLO attacker")
+    lines.append("250-mail.acme.internal")
+    lines.append("250-PIPELINING")
+    lines.append("250-SIZE 10240000")
+    lines.append(f"MAIL FROM:<{mail_from}>")
+    lines.append("250 2.1.0 Ok")
+    lines.append(f"RCPT TO:<{rcpt_to}>")
+    lines.append("250 2.1.5 Ok")
+    lines.append("DATA")
+    lines.append("354 End data with <CR><LF>.<CR><LF>")
+    lines.append(data or "(message body)")
+    lines.append(".")
+    lines.append("250 2.0.0 Ok: queued as 9F2A1")
+    return "\n".join(lines)
+
+
 def ensure_webapp_tables(conn: sqlite3.Connection) -> None:
     conn.execute('''CREATE TABLE IF NOT EXISTS honeytokens (
                      id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -150,7 +378,7 @@ def mark_honeytoken_used(conn: sqlite3.Connection, token_value: str, ip: str) ->
     conn.commit()
 
 
-def emit_bus_for_attack(attack_id: int, ip: str, service: str, payload: str) -> None:
+def emit_bus_for_attack(attack_id: int, ip: str, service: str, payload: str, category: str | None = None) -> None:
     # Keep this lightweight: FeatureExtractor will map unknown values to defaults.
     try:
         bus.emit({
@@ -159,6 +387,7 @@ def emit_bus_for_attack(attack_id: int, ip: str, service: str, payload: str) -> 
             'dst_port': 0,
             'protocol': 'tcp',
             'service': str(service).lower(),
+            'category': category or '',
             'duration': 0.05,
             'src_bytes': len(payload.encode('utf-8', errors='ignore')),
             'dst_bytes': 0,
@@ -246,10 +475,14 @@ def attack_lab_http():
     path = (request.form.get('path') or '/').strip()
     body = (request.form.get('body') or '').strip()
     payload = f"{method} {path} {body}".strip()
+    category = 'Simulated HTTP Probe'
+    action = _lab_action_for('http', category)
+    pol = apply_rl_action(ip, action)
+    sim_response = _http_probe_response(method, path, body, pol.mode)
 
-    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'HTTP', payload, 'Simulated HTTP Probe')
-    emit_bus_for_attack(attack_id, ip, 'http', payload)
-    return render_template('lab_http.html', submitted=True, method=method, path=path, body=body)
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'HTTP', payload, category)
+    emit_bus_for_attack(attack_id, ip, 'http', payload, category)
+    return render_template('lab_http.html', submitted=True, method=method, path=path, body=body, sim_action=pol.mode, sim_response=sim_response)
 
 
 @app.route('/lab/ssh', methods=['GET', 'POST'])
@@ -263,10 +496,14 @@ def attack_lab_ssh():
     password = (request.form.get('password') or '').strip()
     commands = (request.form.get('commands') or '').strip()
     payload = f"user={username} password={password} cmds={commands}".strip()
+    category = 'Simulated SSH Session'
+    action = _lab_action_for('ssh', category)
+    pol = apply_rl_action(ip, action)
+    sim_response = _lab_response_text(pol.mode, 'ssh')
 
-    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'SSH', payload, 'Simulated SSH Session')
-    emit_bus_for_attack(attack_id, ip, 'ssh', payload)
-    return render_template('lab_ssh.html', submitted=True, username=username, password=password, commands=commands)
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'SSH', payload, category)
+    emit_bus_for_attack(attack_id, ip, 'ssh', payload, category)
+    return render_template('lab_ssh.html', submitted=True, username=username, password=password, commands=commands, sim_action=pol.mode, sim_response=sim_response)
 
 
 @app.route('/lab/scan', methods=['GET', 'POST'])
@@ -279,10 +516,85 @@ def attack_lab_scan():
     ports = (request.form.get('ports') or '22,80,443,8080').strip()
     rate = (request.form.get('rate') or 'fast').strip().lower()
     payload = f"scan ports={ports} rate={rate}"
+    category = 'Simulated Port Scan'
+    action = _lab_action_for('scan', category)
+    pol = apply_rl_action(ip, action)
+    sim_response = _lab_response_text(pol.mode, 'scan')
+    sim_transcript = _format_scan_results(ports)
 
-    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'SCAN', payload, 'Simulated Port Scan')
-    emit_bus_for_attack(attack_id, ip, 'scan', payload)
-    return render_template('lab_scan.html', submitted=True, ports=ports, rate=rate)
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'SCAN', payload, category)
+    emit_bus_for_attack(attack_id, ip, 'scan', payload, category)
+    return render_template('lab_scan.html', submitted=True, ports=ports, rate=rate, sim_action=pol.mode, sim_response=sim_response, sim_transcript=sim_transcript)
+
+
+@app.route('/lab/sql', methods=['GET', 'POST'])
+def attack_lab_sql():
+    if request.method == 'GET':
+        return render_template('lab_sql.html', submitted=False)
+
+    ip = get_client_ip()
+    geolocation = resolve_geolocation(ip)
+    target = (request.form.get('target') or '/admin').strip()
+    payload = (request.form.get('payload') or "' OR 1=1--").strip()
+    query_log = (request.form.get('queries') or '').strip()
+    method = 'GET'
+    path = f"{target}?id={payload}"
+    category = 'SQL Injection'
+    action = _lab_action_for('http', category)
+    pol = apply_rl_action(ip, action)
+    sim_response = _lab_response_text(pol.mode, 'http')
+
+    attack_payload = f"{method} {path}"
+    if query_log:
+        attack_payload = f"{attack_payload}\nqueries:\n{query_log}"
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'HTTP', attack_payload, category)
+    emit_bus_for_attack(attack_id, ip, 'http', attack_payload, category)
+    sim_transcript = "HTTP/1.1 200 OK\nContent-Type: text/plain\n\n-- fake db dump\nCREATE TABLE users(id int, email text, role text);\nINSERT INTO users VALUES (1,'admin@acme.internal','admin');\nINSERT INTO users VALUES (2,'ops@acme.internal','ops');\nINSERT INTO users VALUES (3,'dev@acme.internal','dev');"
+    return render_template('lab_sql.html', submitted=True, target=target, payload=payload, query_log=query_log, sim_action=pol.mode, sim_response=sim_response, sim_transcript=sim_transcript)
+
+
+@app.route('/lab/ftp', methods=['GET', 'POST'])
+def attack_lab_ftp():
+    if request.method == 'GET':
+        return render_template('lab_ftp.html', submitted=False)
+
+    ip = get_client_ip()
+    geolocation = resolve_geolocation(ip)
+    username = (request.form.get('username') or 'anonymous').strip()
+    password = (request.form.get('password') or 'anonymous').strip()
+    commands = (request.form.get('commands') or 'USER\nPASS\nLIST\nRETR secret.txt').strip()
+    payload = f"user={username} pass={password} cmds={commands}".strip()
+    category = 'Simulated FTP Session'
+    action = _lab_action_for('ftp', category)
+    pol = apply_rl_action(ip, action)
+    sim_response = _lab_response_text(pol.mode, 'ftp')
+    sim_transcript = _format_ftp_transcript(username, password, commands)
+
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'FTP', payload, category)
+    emit_bus_for_attack(attack_id, ip, 'ftp', payload, category)
+    return render_template('lab_ftp.html', submitted=True, username=username, password=password, commands=commands, sim_action=pol.mode, sim_response=sim_response, sim_transcript=sim_transcript)
+
+
+@app.route('/lab/smtp', methods=['GET', 'POST'])
+def attack_lab_smtp():
+    if request.method == 'GET':
+        return render_template('lab_smtp.html', submitted=False)
+
+    ip = get_client_ip()
+    geolocation = resolve_geolocation(ip)
+    mail_from = (request.form.get('mail_from') or 'attacker@example.com').strip()
+    rcpt_to = (request.form.get('rcpt_to') or 'admin@acme.internal').strip()
+    data = (request.form.get('data') or 'Subject: test\n\nHello').strip()
+    payload = f"MAIL FROM:<{mail_from}> RCPT TO:<{rcpt_to}> DATA:{data}".strip()
+    category = 'Simulated SMTP Session'
+    action = _lab_action_for('smtp', category)
+    pol = apply_rl_action(ip, action)
+    sim_response = _lab_response_text(pol.mode, 'smtp')
+    sim_transcript = _format_smtp_transcript(mail_from, rcpt_to, data)
+
+    attack_id = log_attack(ip, geolocation, utc_now_iso(), 'SMTP', payload, category)
+    emit_bus_for_attack(attack_id, ip, 'smtp', payload, category)
+    return render_template('lab_smtp.html', submitted=True, mail_from=mail_from, rcpt_to=rcpt_to, data=data, sim_action=pol.mode, sim_response=sim_response, sim_transcript=sim_transcript)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -344,7 +656,7 @@ def webapp_reset_token(token: str):
 
             geolocation = resolve_geolocation(ip)
             attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP', f'Reset link opened token={token}', 'Honeytoken Used')
-            emit_bus_for_attack(attack_id, ip, 'webapp', f'Reset link opened token={token}')
+            emit_bus_for_attack(attack_id, ip, 'webapp', f'Reset link opened token={token}', 'Honeytoken Used')
 
         if request.method == 'GET':
             return render_template('webapp_reset_token.html', token=token, used_at=row['used_at'])
@@ -413,7 +725,7 @@ def api_profile():
             add_audit(conn, ip, 'api_key_used', 'Honeytoken API key used on /api/v1/profile')
             geolocation = resolve_geolocation(ip)
             attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP_API', f'X-API-Key={api_key}', 'Honeytoken Used')
-            emit_bus_for_attack(attack_id, ip, 'http', f'API key used token={raw_token}')
+            emit_bus_for_attack(attack_id, ip, 'http', f'API key used token={raw_token}', 'Honeytoken Used')
 
             return jsonify({
                 'ok': True,
@@ -424,7 +736,7 @@ def api_profile():
         add_audit(conn, ip, 'api_key_invalid', 'Invalid API key used on /api/v1/profile')
         geolocation = resolve_geolocation(ip)
         attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP_API', f'Invalid key={api_key}', 'API Probe')
-        emit_bus_for_attack(attack_id, ip, 'http', f'Invalid API key used')
+        emit_bus_for_attack(attack_id, ip, 'http', f'Invalid API key used', 'API Probe')
         return jsonify({'ok': False, 'error': 'invalid_api_key'}), 401
     finally:
         conn.close()
@@ -457,7 +769,7 @@ def honey_pixel(token: str):
             add_audit(conn, ip, 'pixel_fired', 'Honeytoken tracking pixel requested')
             geolocation = resolve_geolocation(ip)
             attack_id = log_attack(ip, geolocation, utc_now_iso(), 'WEBAPP', f'Pixel requested token={token}', 'Honeytoken Used')
-            emit_bus_for_attack(attack_id, ip, 'http', f'Pixel requested token={token}')
+            emit_bus_for_attack(attack_id, ip, 'http', f'Pixel requested token={token}', 'Honeytoken Used')
     finally:
         conn.close()
 
@@ -503,6 +815,15 @@ def log_attack(ip, geolocation, timestamp, service, payload, category):
         )
         conn.commit()
         attack_id = cur.lastrowid
+
+        # Quick RL fallback for immediate dashboard display.
+        quick_action = _quick_rl_action(service, category)
+        quick_des = _quick_des(service, category)
+        conn.execute(
+            'UPDATE attacks SET rl_action=?, rl_des=? WHERE id=?',
+            (quick_action, quick_des, int(attack_id)),
+        )
+        conn.commit()
     finally:
         conn.close()
 
@@ -514,7 +835,9 @@ def log_attack(ip, geolocation, timestamp, service, payload, category):
         'timestamp': timestamp,
         'service': service,
         'payload': payload,
-        'category': category
+        'category': category,
+        'rl_action': _quick_rl_action(service, category),
+        'rl_des': _quick_des(service, category),
     }
     socketio.emit('new_attack', attack_data)
 
@@ -568,24 +891,22 @@ def handle_enriched_event(enriched_event):
     # Send enriched event to dashboard
     attack_id = enriched_event.get('attack_id')
 
-    # Enforce a strict safety response if RL marks its own action as not ideal.
-    feedback = rl_result.get('feedback') or {}
-    enforced_action = feedback.get('enforced_action')
-    if enforced_action:
-        rl_result['action'] = enforced_action
-        try:
-            ip = str(enriched_event.get('src_ip', 'unknown'))
-            pol = apply_rl_action(ip, enforced_action)
+    # Apply the RL action immediately so the response affects the attacker.
+    try:
+        ip = str(enriched_event.get('src_ip', 'unknown'))
+        action = rl_result.get('action') or ''
+        if action:
+            pol = apply_rl_action(ip, action)
             socketio.emit('action_applied', {
                 'ip': ip,
                 'mode': pol.mode,
                 'delay_seconds': pol.delay_seconds,
                 'expires_at': pol.expires_at,
-                'rl_action': enforced_action,
+                'rl_action': action,
                 'id': attack_id,
             })
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     # Persist enrichment back into DB if we can correlate.
     if attack_id is not None:

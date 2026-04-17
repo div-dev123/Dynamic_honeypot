@@ -10,7 +10,7 @@ import time
 from urllib.parse import urlsplit, parse_qs, unquote_plus
 from typing import Optional
 from app import log_attack
-from mitigation import get_policy
+from mitigation import get_policy, apply_rl_action
 
 # Import shared EventBus instance
 from shared_bus import bus
@@ -82,11 +82,93 @@ def _get_session(client_ip: str) -> dict:
                     'suspicion': 0,
                     'fakedb': False,
                     'deeppacketlog': False,
+                    'deeppacketlog_notice': False,
                 }
             }
             _SESSIONS[client_ip] = s
         s['last_seen'] = _now()
         return s
+
+
+def _apply_live_policy(client_ip: str) -> None:
+    pol = get_policy(client_ip)
+    if not pol.active():
+        return
+    if pol.mode == 'tarpit' and pol.delay_seconds:
+        time.sleep(pol.delay_seconds)
+    if pol.mode == 'deeppacketlog' and pol.delay_seconds:
+        time.sleep(pol.delay_seconds)
+    if pol.mode == 'deeppacketlog':
+        session = _get_session(client_ip)
+        session['signals']['deeppacketlog'] = True
+    if pol.mode == 'fakedb':
+        session = _get_session(client_ip)
+        session['signals']['fakedb'] = True
+
+
+def _attack_type_from_category(category: str, service: str) -> str:
+    c = str(category or '').lower()
+    s = str(service or '').lower()
+    if 'dos' in c:
+        return 'DoS'
+    if any(k in c for k in ['probe', 'recon', 'scan']):
+        return 'Probe'
+    if 'brute' in c:
+        return 'R2L'
+    if any(k in c for k in ['credential', 'api probe', 'honeytoken']):
+        return 'R2L'
+    if any(k in c for k in ['post-exploitation', 'execution', 'privilege']):
+        return 'U2R'
+    if s in {'ssh', 'mysql', 'ftp', 'telnet', 'smtp'}:
+        return 'R2L'
+    return 'Normal'
+
+
+def _desired_action_for(category: str, service: str) -> str:
+    s = str(service or '').lower()
+    c = str(category or '').lower()
+    if s == 'mysql' and any(k in c for k in ['exploitation', 'recon', 'probe']):
+        return 'fakedb'
+    if any(k in c for k in ['sql injection', 'command injection', 'directory traversal']):
+        return 'fakedb'
+    if 'brute' in c:
+        return 'drop'
+    if any(k in c for k in ['reconnaissance', 'scan', 'probe']):
+        return 'deeppacketlog'
+    if 'malware' in c:
+        return 'drop'
+    attack_type = _attack_type_from_category(category, service)
+    t = attack_type.lower()
+    if t == 'dos':
+        return 'drop'
+    if t == 'probe':
+        return 'deeppacketlog'
+    if t in {'r2l', 'u2r'}:
+        return 'drop'
+    if t in {'zeroday', 'zero-day', 'zero_day'}:
+        return 'tarpit'
+    if t == 'normal':
+        return 'deeppacketlog'
+    return 'drop'
+
+
+def _ensure_policy(client_ip: str, category: str, service: str):
+    pol = get_policy(client_ip)
+    if pol.active() and pol.mode != 'none':
+        return pol
+    action = _desired_action_for(category, service)
+    return apply_rl_action(client_ip, action)
+
+
+def _should_drop(client_socket: socket.socket, client_ip: str) -> bool:
+    pol = get_policy(client_ip)
+    if pol.active() and pol.mode == 'drop':
+        try:
+            client_socket.close()
+        except Exception:
+            pass
+        return True
+    return False
 
 
 def _read_http_request(sock: socket.socket, max_bytes: int = 64 * 1024) -> bytes:
@@ -219,6 +301,7 @@ def log_attack_internal(ip, service, payload, category, duration=0.0, src_bytes=
         'dst_port': SERVICES.get(service, {}).get('port', 0),
         'protocol': 'tcp',  # Default, can be updated based on service
         'service': service.lower(),
+        'category': category,
         'geolocation': geolocation,
         'duration': duration,
         'src_bytes': src_bytes,
@@ -247,6 +330,10 @@ def handle_http(client_socket, client_ip):
     session['http']['visits'] += 1
     signals = _http_detect_signals(req)
     category = _http_category(req, signals)
+    _ensure_policy(client_ip, category, 'http')
+    if _should_drop(client_socket, client_ip):
+        return
+    _apply_live_policy(client_ip)
 
     method = req.get('method', 'GET')
     path = req.get('path', '/')
@@ -256,8 +343,14 @@ def handle_http(client_socket, client_ip):
     authed_cookie = (f"session={session['session_id']}" in cookie)
     authed = bool(session['http'].get('authed')) or authed_cookie
 
+    resp = None
+    # If fakedb is active, prioritize fake DB exposure on common endpoints.
+    if session.get('signals', {}).get('fakedb') and any(k in path for k in ['/phpmyadmin', '/db', '/db.sql', '/admin/users']):
+        fake = "-- fake db dump\nCREATE TABLE users(id int, email text);\nINSERT INTO users VALUES (1,'admin@acme.internal');\n"
+        resp = _http_response('200 OK', 'text/plain; charset=utf-8', fake)
+
     # Basic lures + common paths attackers probe
-    if method == 'GET' and path == '/':
+    if resp is None and method == 'GET' and path == '/':
         page = (
             "<html><head><title>Acme Intranet</title></head><body>"
             "<h1>Acme Intranet</h1>"
@@ -271,11 +364,11 @@ def handle_http(client_socket, client_ip):
         )
         resp = _http_response('200 OK', 'text/html; charset=utf-8', page)
 
-    elif method == 'GET' and path == '/robots.txt':
+    elif resp is None and method == 'GET' and path == '/robots.txt':
         robots = "User-agent: *\nDisallow: /admin\nDisallow: /backup.zip\nDisallow: /db.sql\n"
         resp = _http_response('200 OK', 'text/plain; charset=utf-8', robots)
 
-    elif method == 'GET' and path in ['/wp-login.php', '/login']:
+    elif resp is None and method == 'GET' and path in ['/wp-login.php', '/login']:
         page = (
             "<html><body><h1>Log In</h1>"
             "<form method='POST' action='/admin/login'>"
@@ -286,7 +379,7 @@ def handle_http(client_socket, client_ip):
         )
         resp = _http_response('200 OK', 'text/html; charset=utf-8', page)
 
-    elif method == 'GET' and path in ['/phpmyadmin', '/pma']:
+    elif resp is None and method == 'GET' and path in ['/phpmyadmin', '/pma']:
         page = (
             "<html><body><h1>phpMyAdmin</h1>"
             "<p>Version 4.9.7</p>"
@@ -298,13 +391,13 @@ def handle_http(client_socket, client_ip):
         )
         resp = _http_response('200 OK', 'text/html; charset=utf-8', page)
 
-    elif method == 'GET' and path == '/api/v1/status':
+    elif resp is None and method == 'GET' and path == '/api/v1/status':
         resp = _http_response('200 OK', 'application/json', '{"status":"ok","version":"1.12.3","uptime":%d}' % int(_now()))
 
-    elif method == 'GET' and path == '/status':
+    elif resp is None and method == 'GET' and path == '/status':
         resp = _http_response('200 OK', 'application/json', '{"status":"ok"}')
 
-    elif method == 'GET' and path in ['/.env', '/config.php', '/backup.zip', '/db.sql']:
+    elif resp is None and method == 'GET' and path in ['/.env', '/config.php', '/backup.zip', '/db.sql']:
         # Fake "sensitive" files to keep attackers engaged (never real secrets).
         if path == '/.env':
             fake = "APP_ENV=prod\nDB_HOST=127.0.0.1\nDB_USER=app\nDB_PASS=changeme\n"
@@ -316,7 +409,7 @@ def handle_http(client_socket, client_ip):
             fake = "-- MySQL dump\n-- (fake)\nCREATE TABLE users(id int);\n"
         resp = _http_response('200 OK', 'text/plain; charset=utf-8', fake)
 
-    elif method == 'GET' and path == '/admin':
+    elif resp is None and method == 'GET' and path == '/admin':
         if authed:
             page = (
                 "<html><body><h1>Admin Console</h1>"
@@ -334,7 +427,7 @@ def handle_http(client_socket, client_ip):
             )
         resp = _http_response('200 OK', 'text/html; charset=utf-8', page)
 
-    elif method == 'POST' and path == '/admin/login':
+    elif resp is None and method == 'POST' and path == '/admin/login':
         # Accept a few common weak credentials to allow engagement.
         lowered = body.lower()
         username = None
@@ -354,7 +447,7 @@ def handle_http(client_socket, client_ip):
             page = "<html><body><h1>Login Failed</h1><p>Invalid credentials.</p></body></html>"
             resp = _http_response('401 Unauthorized', 'text/html; charset=utf-8', page)
 
-    elif method == 'POST' and path == '/login':
+    elif resp is None and method == 'POST' and path == '/login':
         # Backward-compatible alias for the login flow
         req['path'] = '/admin/login'
         # Re-enter via the same logic by pretending this was /admin/login
@@ -376,12 +469,12 @@ def handle_http(client_socket, client_ip):
             page = "<html><body><h1>Login Failed</h1><p>Invalid credentials.</p></body></html>"
             resp = _http_response('401 Unauthorized', 'text/html; charset=utf-8', page)
 
-    elif method == 'POST' and path in ['/upload', '/api/v1/upload']:
+    elif resp is None and method == 'POST' and path in ['/upload', '/api/v1/upload']:
         # Simulate accepting an upload and returning a token
         token = secrets.token_hex(12)
         resp = _http_response('201 Created', 'application/json', '{"ok":true,"id":"%s"}' % token)
 
-    else:
+    elif resp is None:
         # Special-case a traversal attempt for /etc/passwd to keep attacker engaged.
         decoded_target = unquote_plus(req.get('target', ''))
         if signals.get('traversal') and ('etc/passwd' in decoded_target.lower()):
@@ -520,6 +613,8 @@ def handle_ssh(client_socket, client_ip):
             send(b"$ ")
             continue
 
+        _apply_live_policy(client_ip)
+
         ssh_state['history'].append(command)
         logging.info(f"SSH command from {client_ip}: {command}")
 
@@ -527,6 +622,7 @@ def handle_ssh(client_socket, client_ip):
         lower = cmd.lower()
         category = 'Post-Exploitation'
         response = ""
+
 
         if lower in ['exit', 'logout', 'quit']:
             response = "logout\r\n"
@@ -565,6 +661,9 @@ def handle_ssh(client_socket, client_ip):
             else:
                 response = content.replace('\n', '\r\n') + "\r\n"
 
+        elif ssh_state.get('signals', {}).get('fakedb') and any(lower.startswith(k) for k in ['mysql', 'psql', 'sqlite3']):
+            response = "id | email\r\n1  | admin@acme.internal\r\n2  | ops@acme.internal\r\n"
+
         elif lower == 'ps' or lower.startswith('ps '):
             response = "  PID TTY      TIME CMD\r\n  812 ?        00:00:00 nginx\r\n  901 ?        00:00:01 sshd\r\n"
 
@@ -592,6 +691,14 @@ def handle_ssh(client_socket, client_ip):
             if any(k in lower for k in ['netstat', 'ifconfig', 'ip a', 'ss ', 'who', 'last', 'sudo', 'passwd']):
                 category = 'Reconnaissance'
             response = f"bash: {cmd.split(' ',1)[0]}: command not found\r\n"
+
+        _ensure_policy(client_ip, category, 'ssh')
+        if _should_drop(client_socket, client_ip):
+            return
+        _apply_live_policy(client_ip)
+        if ssh_state.get('signals', {}).get('deeppacketlog') and not ssh_state['signals'].get('deeppacketlog_notice'):
+            send(b"Last login: Tue Apr  8 12:41:12 2026 from 10.0.0.12\r\n")
+            ssh_state['signals']['deeppacketlog_notice'] = True
 
         if response:
             send(response.encode('utf-8', errors='ignore'))
@@ -635,6 +742,13 @@ def handle_mysql(client_socket, client_ip):
         sql_query = client_socket.recv(1024).decode()
         total_bytes_received += len(sql_query)
         logging.info(f"MySQL query from {client_ip}: {sql_query}")
+
+        _ensure_policy(client_ip, 'Exploitation', 'mysql')
+        if _should_drop(client_socket, client_ip):
+            return
+        _apply_live_policy(client_ip)
+
+        _apply_live_policy(client_ip)
 
         if session.get('signals', {}).get('deeppacketlog'):
             logging.info(f"Deep packet log: mysql_query={sql_query}")
@@ -684,6 +798,13 @@ def handle_ftp(client_socket, client_ip):
         command = client_socket.recv(1024).decode().strip()
         total_bytes_received += len(command)
         logging.info(f"FTP command from {client_ip}: {command}")
+
+        _ensure_policy(client_ip, 'Exploitation', 'ftp')
+        if _should_drop(client_socket, client_ip):
+            return
+        _apply_live_policy(client_ip)
+
+        _apply_live_policy(client_ip)
 
         if command.upper() == "QUIT":
             goodbye_msg = b"221 Goodbye.\r\n"
@@ -738,6 +859,13 @@ def handle_telnet(client_socket, client_ip):
         command = client_socket.recv(1024).decode().strip()
         total_bytes_received += len(command)
         logging.info(f"Telnet command from {client_ip}: {command}")
+
+        _ensure_policy(client_ip, 'Exploitation', 'telnet')
+        if _should_drop(client_socket, client_ip):
+            return
+        _apply_live_policy(client_ip)
+
+        _apply_live_policy(client_ip)
         
         if command.lower() == "exit":
             goodbye_msg = b"Goodbye.\r\n"
@@ -772,6 +900,13 @@ def handle_smtp(client_socket, client_ip):
         command = client_socket.recv(1024).decode().strip()
         total_bytes_received += len(command)
         logging.info(f"SMTP command from {client_ip}: {command}")
+
+        _ensure_policy(client_ip, 'Reconnaissance', 'smtp')
+        if _should_drop(client_socket, client_ip):
+            return
+        _apply_live_policy(client_ip)
+
+        _apply_live_policy(client_ip)
 
         if command.upper().startswith("HELO") or command.upper().startswith("EHLO"):
             response = b"250-honeypot.local Hello\r\n250-SIZE 35882577\r\n250-8BITMIME\r\n250 AUTH LOGIN PLAIN\r\n"

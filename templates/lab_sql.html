@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Injection Lab | Neural Honeypot</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="cyber-header">
+        <div class="cyber-container">
+            <nav class="navbar navbar-expand-lg navbar-dark cyber-navbar">
+                <a class="navbar-brand glow-text" href="/">
+                    <i class="fas fa-brain"></i> NEURAL HONEYPOT
+                </a>
+                <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item"><a class="nav-link" href="/"><i class="fas fa-home"></i> HOME</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/attack_summary"><i class="fas fa-shield-alt"></i> THREAT DASHBOARD</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/map"><i class="fas fa-globe"></i> THREAT MAP</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/analysis"><i class="fas fa-chart-line"></i> ANALYSIS</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/webapp"><i class="fas fa-user-shield"></i> DECOY WEB APP</a></li>
+                        <li class="nav-item"><a class="nav-link active" href="/lab"><i class="fas fa-flask"></i> ATTACK LAB</a></li>
+                    </ul>
+                </div>
+            </nav>
+        </div>
+    </header>
+
+    <section class="cyber-container">
+        <div class="cyber-card">
+            <h1 class="cyber-heading glow-text"><i class="fas fa-database"></i> SQL INJECTION LAB</h1>
+            <p class="cyber-text">Simulate SQLi payloads against a web endpoint.</p>
+
+            {% if submitted %}
+            <div class="alert alert-success" role="alert">
+                SQL injection logged. Check the Threat Dashboard for the event.
+            </div>
+            <div class="cyber-card" style="margin-top: 16px;">
+                <h3 class="cyber-subheading"><i class="fas fa-shield-alt"></i> Response Preview</h3>
+                <div class="cyber-text">Action: <b>{{ sim_action }}</b></div>
+                <div class="terminal-text" style="margin-top: 8px;">{{ sim_response }}</div>
+                {% if sim_transcript %}
+                <pre class="terminal-text" style="margin-top: 10px; white-space: pre-wrap;">{{ sim_transcript }}</pre>
+                {% endif %}
+                {% if query_log %}
+                <div class="cyber-text" style="margin-top: 10px;"><b>Query Log</b></div>
+                <pre class="terminal-text" style="margin-top: 6px; white-space: pre-wrap;">{{ query_log }}</pre>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="row">
+                <div class="col-lg-6">
+                    <form method="post">
+                        <div class="form-group">
+                            <label class="cyber-text">Target Path</label>
+                            <input class="form-control" name="target" value="{{ target or '/admin' }}" />
+                        </div>
+                        <div class="form-group">
+                            <label class="cyber-text">SQL Payload</label>
+                            <input class="form-control" name="payload" value="{{ payload or "' OR 1=1--" }}" />
+                        </div>
+                        <input type="hidden" name="queries" id="sqlQueries" value="{{ query_log or '' }}" />
+                        <button class="cyber-btn" type="submit"><i class="fas fa-play"></i> LOG SQLi</button>
+                        <a class="cyber-btn ml-2" href="/lab"><i class="fas fa-arrow-left"></i> BACK</a>
+                    </form>
+                </div>
+                <div class="col-lg-6">
+                    <div class="cyber-card" style="height: 100%;">
+                        <h3 class="cyber-subheading"><i class="fas fa-terminal"></i> SQL Console</h3>
+                        <p class="cyber-text">Interact with the fake DB using SQL queries.</p>
+                        <div id="sqlOutput" class="terminal-text" style="min-height: 180px;">mysql> </div>
+                        <div class="terminal-input-row" style="display: flex; gap: 8px; align-items: center;">
+                            <span class="prompt">mysql&gt;</span>
+                            <input id="sqlInput" type="text" class="form-control" placeholder="SELECT * FROM users;" />
+                            <button class="cyber-btn" type="button" id="runSql"><i class="fas fa-play"></i></button>
+                        </div>
+                        <div class="terminal-text" style="margin-top: 12px;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="cmd" data-sql="SELECT * FROM users;">SELECT * FROM users;</span>
+                                <button class="cyber-btn btn-sm copy-sql" type="button" data-sql="SELECT * FROM users;"><i class="fas fa-copy"></i></button>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="cmd" data-sql="UPDATE users SET role='admin' WHERE id=2;">UPDATE users SET role='admin' WHERE id=2;</span>
+                                <button class="cyber-btn btn-sm copy-sql" type="button" data-sql="UPDATE users SET role='admin' WHERE id=2;"><i class="fas fa-copy"></i></button>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="cmd" data-sql="DELETE FROM users WHERE id=3;">DELETE FROM users WHERE id=3;</span>
+                                <button class="cyber-btn btn-sm copy-sql" type="button" data-sql="DELETE FROM users WHERE id=3;"><i class="fas fa-copy"></i></button>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="cmd" data-sql="INSERT INTO users VALUES (4,'audit@acme.internal','auditor');">INSERT INTO users VALUES (4,'audit@acme.internal','auditor');</span>
+                                <button class="cyber-btn btn-sm copy-sql" type="button" data-sql="INSERT INTO users VALUES (4,'audit@acme.internal','auditor');"><i class="fas fa-copy"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="cyber-footer">
+        <div class="cyber-container">
+            <p class="cyber-text"><i class="fas fa-flask"></i> Attack Lab</p>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        const rows = [
+            { id: 1, email: 'admin@acme.internal', role: 'admin' },
+            { id: 2, email: 'ops@acme.internal', role: 'ops' },
+            { id: 3, email: 'dev@acme.internal', role: 'dev' },
+        ];
+
+        const output = document.getElementById('sqlOutput');
+        const input = document.getElementById('sqlInput');
+        const run = document.getElementById('runSql');
+        const queryField = document.getElementById('sqlQueries');
+        const queryLog = queryField && queryField.value ? queryField.value.split('\n') : [];
+
+        function renderTable() {
+            let out = 'id | email | role\n';
+            out += rows.map(r => `${r.id} | ${r.email} | ${r.role}`).join('\n');
+            return out;
+        }
+
+        function appendOutput(text) {
+            output.textContent += `\n${text}\nmysql> `;
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function recordQuery(sql) {
+            queryLog.push(sql);
+            if (queryField) {
+                queryField.value = queryLog.join('\n');
+            }
+        }
+
+        function execSql(sql) {
+            const s = (sql || '').trim();
+            if (!s) return;
+            const lower = s.toLowerCase();
+            recordQuery(s);
+
+            if (lower.startsWith('select')) {
+                appendOutput(renderTable());
+                return;
+            }
+
+            if (lower.startsWith('update')) {
+                const m = lower.match(/set\s+role\s*=\s*'([^']+)'\s+where\s+id\s*=\s*(\d+)/);
+                if (m) {
+                    const role = m[1];
+                    const id = parseInt(m[2], 10);
+                    const row = rows.find(r => r.id === id);
+                    if (row) row.role = role;
+                    appendOutput('Query OK, 1 row affected');
+                } else {
+                    appendOutput('Query OK, 0 rows affected');
+                }
+                return;
+            }
+
+            if (lower.startsWith('delete')) {
+                const m = lower.match(/where\s+id\s*=\s*(\d+)/);
+                if (m) {
+                    const id = parseInt(m[1], 10);
+                    const idx = rows.findIndex(r => r.id === id);
+                    if (idx >= 0) rows.splice(idx, 1);
+                    appendOutput('Query OK, 1 row affected');
+                } else {
+                    appendOutput('Query OK, 0 rows affected');
+                }
+                return;
+            }
+
+            if (lower.startsWith('insert')) {
+                const m = s.match(/VALUES\s*\((\d+),'([^']+)','([^']+)'\)/i);
+                if (m) {
+                    rows.push({ id: parseInt(m[1], 10), email: m[2], role: m[3] });
+                    appendOutput('Query OK, 1 row affected');
+                } else {
+                    appendOutput('Query OK');
+                }
+                return;
+            }
+
+            appendOutput('Query OK');
+        }
+
+        if (run) {
+            run.addEventListener('click', () => {
+                execSql(input.value);
+                input.value = '';
+            });
+        }
+
+        if (input) {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    execSql(input.value);
+                    input.value = '';
+                }
+            });
+        }
+
+        document.querySelectorAll('.copy-sql').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(btn.dataset.sql || '');
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-sql]').forEach(el => {
+            el.style.cursor = 'pointer';
+            el.addEventListener('click', () => {
+                input.value = el.dataset.sql || '';
+                input.focus();
+            });
+        });
+    </script>
+</body>
+</html>

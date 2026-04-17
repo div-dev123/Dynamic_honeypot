@@ -33,6 +33,15 @@ class EventBus:
             # ML classification
             ml_result = self.ml.predict(features)
 
+            # Pass service context to RL
+            ml_result['service'] = event.get('service')
+            ml_result['category'] = event.get('category')
+
+            # Rule-based override for known categories/services
+            override = self._override_attack_type(event)
+            if override:
+                ml_result['attack_type'] = override
+
             # RL decision
             rl_result = self.rl.get_action(
                 event.get('src_ip', 'unknown'), ml_result)
@@ -70,6 +79,34 @@ class EventBus:
         thread = threading.Thread(target=worker, daemon=True)
         thread.start()
         print('✅ EventBus started')
+
+    def _override_attack_type(self, event):
+        category = str(event.get('category') or '').lower()
+        service = str(event.get('service') or '').lower()
+
+        if 'dos' in category:
+            return 'DoS'
+        if any(k in category for k in ['probe', 'recon', 'scan']):
+            return 'Probe'
+        if any(k in category for k in ['sql injection', 'command injection', 'directory traversal']):
+            return 'R2L'
+        if any(k in category for k in ['malware upload', 'malware download']):
+            return 'R2L'
+        if 'brute' in category:
+            return 'R2L'
+        if any(k in category for k in ['malware', 'credential', 'api probe']):
+            return 'R2L'
+        if any(k in category for k in ['post-exploitation', 'execution', 'privilege']):
+            return 'U2R'
+        if 'honeytoken' in category:
+            return 'R2L'
+
+        # Service-based fallback
+        if service == 'ssh':
+            return 'R2L'
+        if service in {'mysql', 'ftp', 'telnet', 'smtp'}:
+            return 'R2L'
+        return None
 
     def stop(self):
         self.running = False

@@ -77,7 +77,7 @@ def apply_rl_action(ip: str, rl_action: str, *, ttl_seconds: Optional[float] = 9
 
     This intentionally uses a conservative mapping since RL actions are model-defined.
     """
-    action = (rl_action or '').lower().strip()
+    action = str(rl_action or '').lower().strip()
 
     # Common action keywords
     if any(k in action for k in ['block', 'drop', 'deny', 'reset']):

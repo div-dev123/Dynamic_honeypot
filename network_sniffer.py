@@ -7,7 +7,7 @@ from shared_bus import bus
 
 # Configure logging for network traffic (stdout only; no file writes)
 traffic_logger = logging.getLogger('network_traffic')
-traffic_logger.setLevel(logging.WARNING)
+traffic_logger.setLevel(logging.ERROR)
 if not traffic_logger.handlers:
     handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -17,6 +17,7 @@ if not traffic_logger.handlers:
 # Data structures to store traffic data
 traffic_data = defaultdict(int)
 scan_data = defaultdict(set)  # Use a set to track unique ports scanned by each IP
+last_scan_warn = defaultdict(float)
 
 # Thresholds for detecting suspicious activity
 PORT_SCAN_THRESHOLD = 100  # Lowering the threshold for testing purposes
@@ -35,8 +36,9 @@ def detect_port_scan(packet):
 
         scan_data[ip_src].add(port)
         traffic_logger.debug(f"Port scan data for IP {ip_src}: {scan_data[ip_src]}")
+        # Port scan warnings suppressed (too noisy for demos)
         if len(scan_data[ip_src]) > PORT_SCAN_THRESHOLD:
-            traffic_logger.warning(f"Port scan detected from IP: {ip_src}")
+            return
             # Service activation belongs to the honeypot engine.
             # The sniffer's responsibility is detection + telemetry.
 

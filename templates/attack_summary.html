@@ -305,6 +305,9 @@
                 const isAnomaly = attack.ml_is_anomaly === 1 || attack.ml_is_anomaly === true;
 
                 const row = tableBody.insertRow();
+                const rlAction = (attack.rl_action === null || attack.rl_action === undefined || attack.rl_action === '')
+                    ? 'N/A'
+                    : attack.rl_action;
                 row.innerHTML = `
                     <td><span class="status-indicator ${statusClass}">${attack.ip}</span></td>
                     <td><i class="fas fa-map-marker-alt"></i> ${attack.geolocation || 'Unknown'}</td>
@@ -314,7 +317,7 @@
                     <td>${confidence}</td>
                     <td><span class="status-indicator ${isAnomaly ? 'status-warning' : 'status-normal'}">${isAnomaly ? 'Yes' : 'No'}</span></td>
                     <td>
-                        <div class="cyber-text">${attack.rl_action || 'N/A'}</div>
+                        <div class="cyber-text">${rlAction}</div>
                         ${attack.rl_feedback_status ? `<div class="cyber-text" style="font-size: 0.85rem; opacity: 0.8;">${attack.rl_feedback_status === 'not_ideal' ? 'Not ideal → ' + (attack.rl_feedback_suggested || '') : 'OK'}</div>` : ''}
                     </td>
                     <td><span class="cyber-text">${attack.rl_des !== null && attack.rl_des !== undefined ? attack.rl_des : 'N/A'}</span></td>
@@ -474,7 +477,7 @@
             const ip = data.ip || 'unknown';
             const mode = data.mode || 'none';
             const expiresAt = data.expires_at ? new Date(data.expires_at * 1000).toLocaleString() : 'n/a';
-            alert(`Mitigation applied for ${ip}: ${mode} (expires: ${expiresAt})`);
+            console.log(`Mitigation applied for ${ip}: ${mode} (expires: ${expiresAt})`);
         });
 
         // Utility functions

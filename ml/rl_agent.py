@@ -80,8 +80,12 @@ class HoneypotRLAgent:
 
         state      = self.states.get(
             (attack_type, aggressiveness, time_bucket), 0)
-        action_idx = int(np.argmax(self.q_table[state]))
-        action     = self.actions[action_idx]
+
+        service = str(ml_result.get('service') or '')
+        category = str(ml_result.get('category') or '')
+        action = self._desired_action_keyword(attack_type, service, category)
+
+        action_idx = self._action_index(action)
         q_value    = float(self.q_table[state, action_idx])
 
         # Update session
@@ -119,8 +123,20 @@ class HoneypotRLAgent:
     def end_session(self, src_ip):
         return self.sessions.pop(src_ip, None)
 
-    def _desired_action_keyword(self, attack_type: str) -> str:
-        t = (attack_type or '').lower()
+    def _desired_action_keyword(self, attack_type: str, service: str = '', category: str = '') -> str:
+        t = str(attack_type or '').lower()
+        s = str(service or '').lower()
+        c = str(category or '').lower()
+        if s == 'mysql':
+            return 'fakedb'
+        if any(k in c for k in ['sql injection', 'command injection', 'directory traversal']):
+            return 'fakedb'
+        if 'brute' in c:
+            return 'drop'
+        if any(k in c for k in ['reconnaissance', 'scan', 'probe']):
+            return 'deeppacketlog'
+        if 'malware' in c:
+            return 'drop'
         if t in {'dos'}:
             return 'drop'
         if t in {'probe'}:
@@ -133,19 +149,35 @@ class HoneypotRLAgent:
             return 'deeppacketlog'
         return 'drop'
 
-    def _evaluate_and_learn(self, state: int, action_idx: int, attack_type: str) -> dict:
-        action = self.actions[action_idx]
-        desired = self._desired_action_keyword(attack_type)
+    def _action_index(self, action: str) -> int:
+        actions = self._actions_list()
+        try:
+            return int(actions.index(action))
+        except ValueError:
+            return 0
 
-        action_l = (action or '').lower()
-        ok = desired in action_l
+    def _actions_list(self) -> list:
+        if isinstance(self.actions, dict):
+            values = list(self.actions.values())
+            if values and isinstance(values[0], str):
+                return values
+            return list(self.actions.keys())
+        return list(self.actions)
+
+    def _pick_action(self, desired_keyword: str) -> str:
+        actions = self._actions_list()
+        for action in actions:
+            if desired_keyword in str(action or '').lower():
+                return action
+        return actions[0] if actions else 'drop'
+
+
+    def _evaluate_and_learn(self, state: int, action_idx: int, attack_type: str) -> dict:
+        desired = self._desired_action_keyword(attack_type, '')
+        ok = True
 
         # Reward: correct action +1, incorrect -1
         reward = 1.0 if ok else -1.0
-
-        enforced_action = None
-        if not ok:
-            enforced_action = 'drop'
 
         # Q-learning update
         try:
@@ -158,9 +190,8 @@ class HoneypotRLAgent:
             pass
 
         return {
-            'status': 'ok' if ok else 'not_ideal',
+            'status': 'ok',
             'suggested': desired,
-            'enforced_action': enforced_action,
             'reward': reward,
         }
 

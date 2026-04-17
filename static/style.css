@@ -512,6 +512,7 @@ body::before {
     border-radius: 6px;
     border-left: 3px solid var(--accent-cyan);
     margin: 1rem 0;
+    color: #ffffff;
 }
 
 .terminal-cursor {

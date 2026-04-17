@@ -41,31 +41,55 @@
             <div class="alert alert-success" role="alert">
                 Simulated probe logged. Check the Threat Dashboard for the new event.
             </div>
+            <div class="cyber-card" style="margin-top: 16px;">
+                <h3 class="cyber-subheading"><i class="fas fa-shield-alt"></i> Response Preview</h3>
+                <div class="cyber-text">Action: <b>{{ sim_action }}</b></div>
+                <pre class="terminal-text" style="margin-top: 8px; white-space: pre-wrap;">{{ sim_response }}</pre>
+            </div>
             {% endif %}
 
-            <form method="post">
-                <div class="form-row">
-                    <div class="form-group col-md-3">
-                        <label class="cyber-text">Method</label>
-                        <select class="form-control" name="method">
-                            <option {% if method == 'GET' %}selected{% endif %}>GET</option>
-                            <option {% if method == 'POST' %}selected{% endif %}>POST</option>
-                            <option {% if method == 'PUT' %}selected{% endif %}>PUT</option>
-                            <option {% if method == 'DELETE' %}selected{% endif %}>DELETE</option>
-                        </select>
-                    </div>
-                    <div class="form-group col-md-9">
-                        <label class="cyber-text">Path</label>
-                        <input type="text" class="form-control" name="path" value="{{ path or '/admin?user=admin%27%20OR%201=1--' }}" />
+            <div class="row">
+                <div class="col-lg-7">
+                    <form method="post">
+                        <div class="form-row">
+                            <div class="form-group col-md-3">
+                                <label class="cyber-text">Method</label>
+                                <select id="httpMethod" class="form-control" name="method">
+                                    <option {% if method == 'GET' %}selected{% endif %}>GET</option>
+                                    <option {% if method == 'POST' %}selected{% endif %}>POST</option>
+                                    <option {% if method == 'PUT' %}selected{% endif %}>PUT</option>
+                                    <option {% if method == 'DELETE' %}selected{% endif %}>DELETE</option>
+                                </select>
+                            </div>
+                            <div class="form-group col-md-9">
+                                <label class="cyber-text">Path</label>
+                                <input id="httpPath" type="text" class="form-control" name="path" value="{{ path or '/admin?user=admin%27%20OR%201=1--' }}" />
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="cyber-text">Body (optional)</label>
+                            <textarea id="httpBody" class="form-control" name="body" rows="6">{{ body or '' }}</textarea>
+                        </div>
+                        <button class="cyber-btn" type="submit"><i class="fas fa-play"></i> LOG PROBE</button>
+                        <a class="cyber-btn ml-2" href="/lab"><i class="fas fa-arrow-left"></i> BACK</a>
+                    </form>
+                </div>
+                <div class="col-lg-5">
+                    <div class="cyber-card" style="height: 100%;">
+                        <h3 class="cyber-subheading"><i class="fas fa-list"></i> Common Payloads</h3>
+                        <p class="cyber-text" style="margin-bottom: 8px;">Click to fill the request.</p>
+                        <div class="terminal-text" id="httpPresets" style="padding: 12px;">
+                            <button class="cyber-btn btn-sm mb-2 w-100" data-method="GET" data-path="/robots.txt">GET /robots.txt</button>
+                            <button class="cyber-btn btn-sm mb-2 w-100" data-method="GET" data-path="/wp-login.php">GET /wp-login.php</button>
+                            <button class="cyber-btn btn-sm mb-2 w-100" data-method="GET" data-path="/phpmyadmin">GET /phpmyadmin</button>
+                            <button class="cyber-btn btn-sm mb-2 w-100" data-method="GET" data-path="/admin?user=admin%27%20OR%201=1--">SQLi probe</button>
+                            <button class="cyber-btn btn-sm mb-2 w-100" data-method="GET" data-path="/index.php?page=../../../../etc/passwd">Traversal probe</button>
+                            <button class="cyber-btn btn-sm mb-2 w-100" data-method="POST" data-path="/admin/login" data-body="username=admin&password=admin123">Brute login</button>
+                            <button class="cyber-btn btn-sm w-100" data-method="POST" data-path="/upload" data-body="file=payload.bin">Upload probe</button>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label class="cyber-text">Body (optional)</label>
-                    <textarea class="form-control" name="body" rows="4">{{ body or '' }}</textarea>
-                </div>
-                <button class="cyber-btn" type="submit"><i class="fas fa-play"></i> LOG PROBE</button>
-                <a class="cyber-btn ml-2" href="/lab"><i class="fas fa-arrow-left"></i> BACK</a>
-            </form>
+            </div>
         </div>
     </section>
 
@@ -78,5 +102,18 @@
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        const httpMethod = document.getElementById('httpMethod');
+        const httpPath = document.getElementById('httpPath');
+        const httpBody = document.getElementById('httpBody');
+
+        document.querySelectorAll('#httpPresets button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (httpMethod) httpMethod.value = btn.dataset.method || 'GET';
+                if (httpPath) httpPath.value = btn.dataset.path || '/';
+                if (httpBody) httpBody.value = btn.dataset.body || '';
+            });
+        });
+    </script>
 </body>
 </html>

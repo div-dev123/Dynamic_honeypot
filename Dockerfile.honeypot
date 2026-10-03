@@ -2,8 +2,16 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-COPY honeypot_engine.py network_sniffer.py /app/
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpcap-dev \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install scapy
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python", "network_sniffer.py"]
+COPY . /app/
+
+EXPOSE 5001 8080 2222 33060 2121 2323 2525
+
+CMD ["python", "main.py"]

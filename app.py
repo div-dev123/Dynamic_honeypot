@@ -816,12 +816,10 @@ def log_attack(ip, geolocation, timestamp, service, payload, category):
         conn.commit()
         attack_id = cur.lastrowid
 
-        # Quick RL fallback for immediate dashboard display.
-        quick_action = _quick_rl_action(service, category)
-        quick_des = _quick_des(service, category)
+        # Initial placeholder before background ML/RL enrichment completes
         conn.execute(
             'UPDATE attacks SET rl_action=?, rl_des=? WHERE id=?',
-            (quick_action, quick_des, int(attack_id)),
+            ('evaluating...', 0.0, int(attack_id)),
         )
         conn.commit()
     finally:
@@ -836,8 +834,8 @@ def log_attack(ip, geolocation, timestamp, service, payload, category):
         'service': service,
         'payload': payload,
         'category': category,
-        'rl_action': _quick_rl_action(service, category),
-        'rl_des': _quick_des(service, category),
+        'rl_action': 'evaluating...',
+        'rl_des': 0.0,
     }
     socketio.emit('new_attack', attack_data)
 
@@ -908,36 +906,8 @@ def handle_enriched_event(enriched_event):
     except Exception:
         pass
 
-    # Persist enrichment back into DB if we can correlate.
+    # Persist enrichment back into DB using true Autoencoder and RL agent results
     if attack_id is not None:
-        # Novelty rule: if this exact payload already exists in DB (same service/category),
-        # then it is NOT an anomaly. If it has never been seen, it IS an anomaly.
-        try:
-            conn = get_db()
-            try:
-                ensure_attacks_table(conn)
-                row = conn.execute(
-                    'SELECT service, payload, category FROM attacks WHERE id=?',
-                    (int(attack_id),),
-                ).fetchone()
-
-                if row:
-                    seen = conn.execute(
-                        'SELECT 1 FROM attacks WHERE service=? AND payload=? AND category=? AND id!=? LIMIT 1',
-                        (row['service'], row['payload'], row['category'], int(attack_id)),
-                    ).fetchone() is not None
-
-                    if seen:
-                        ml_result['is_anomaly'] = False
-                        ml_result['zero_day'] = False
-                    else:
-                        ml_result['is_anomaly'] = True
-            finally:
-                conn.close()
-        except Exception:
-            # If novelty check fails, fall back to ML values.
-            pass
-
         try:
             conn = get_db()
             try:

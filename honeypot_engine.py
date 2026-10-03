@@ -81,6 +81,8 @@ def _get_session(client_ip: str) -> dict:
                 'signals': {
                     'suspicion': 0,
                     'fakedb': False,
+                    'fakedirs': False,
+                    'fake_error': False,
                     'deeppacketlog': False,
                     'deeppacketlog_notice': False,
                 }
@@ -94,16 +96,17 @@ def _apply_live_policy(client_ip: str) -> None:
     pol = get_policy(client_ip)
     if not pol.active():
         return
-    if pol.mode == 'tarpit' and pol.delay_seconds:
+    if pol.delay_seconds:
         time.sleep(pol.delay_seconds)
-    if pol.mode == 'deeppacketlog' and pol.delay_seconds:
-        time.sleep(pol.delay_seconds)
+    session = _get_session(client_ip)
     if pol.mode == 'deeppacketlog':
-        session = _get_session(client_ip)
         session['signals']['deeppacketlog'] = True
-    if pol.mode == 'fakedb':
-        session = _get_session(client_ip)
+    elif pol.mode == 'fakedb':
         session['signals']['fakedb'] = True
+    elif pol.mode == 'fakedirs':
+        session['signals']['fakedirs'] = True
+    elif pol.mode == 'fake_error':
+        session['signals']['fake_error'] = True
 
 
 def _attack_type_from_category(category: str, service: str) -> str:
@@ -344,8 +347,17 @@ def handle_http(client_socket, client_ip):
     authed = bool(session['http'].get('authed')) or authed_cookie
 
     resp = None
+    # If fake_error is active, simulate a server-side error
+    if session.get('signals', {}).get('fake_error'):
+        resp = _http_response('500 Internal Server Error', 'text/plain; charset=utf-8', '500 Internal Server Error: Process terminated.\n')
+
+    # If fakedirs is active, reveal fake file listings
+    elif session.get('signals', {}).get('fakedirs') and any(k in path for k in ['/admin', '/backup', '/files', '/']):
+        fake_listing = "<html><body><h1>Index of /</h1><ul><li><a href='/admin'>admin/</a></li><li><a href='/backup.zip'>backup.zip</a></li><li><a href='/db.sql'>db.sql</a></li></ul></body></html>"
+        resp = _http_response('200 OK', 'text/html; charset=utf-8', fake_listing)
+
     # If fakedb is active, prioritize fake DB exposure on common endpoints.
-    if session.get('signals', {}).get('fakedb') and any(k in path for k in ['/phpmyadmin', '/db', '/db.sql', '/admin/users']):
+    elif session.get('signals', {}).get('fakedb') and any(k in path for k in ['/phpmyadmin', '/db', '/db.sql', '/admin/users']):
         fake = "-- fake db dump\nCREATE TABLE users(id int, email text);\nINSERT INTO users VALUES (1,'admin@acme.internal');\n"
         resp = _http_response('200 OK', 'text/plain; charset=utf-8', fake)
 
@@ -748,8 +760,6 @@ def handle_mysql(client_socket, client_ip):
             return
         _apply_live_policy(client_ip)
 
-        _apply_live_policy(client_ip)
-
         if session.get('signals', {}).get('deeppacketlog'):
             logging.info(f"Deep packet log: mysql_query={sql_query}")
 
@@ -802,8 +812,6 @@ def handle_ftp(client_socket, client_ip):
         _ensure_policy(client_ip, 'Exploitation', 'ftp')
         if _should_drop(client_socket, client_ip):
             return
-        _apply_live_policy(client_ip)
-
         _apply_live_policy(client_ip)
 
         if command.upper() == "QUIT":
@@ -864,8 +872,6 @@ def handle_telnet(client_socket, client_ip):
         if _should_drop(client_socket, client_ip):
             return
         _apply_live_policy(client_ip)
-
-        _apply_live_policy(client_ip)
         
         if command.lower() == "exit":
             goodbye_msg = b"Goodbye.\r\n"
@@ -904,8 +910,6 @@ def handle_smtp(client_socket, client_ip):
         _ensure_policy(client_ip, 'Reconnaissance', 'smtp')
         if _should_drop(client_socket, client_ip):
             return
-        _apply_live_policy(client_ip)
-
         _apply_live_policy(client_ip)
 
         if command.upper().startswith("HELO") or command.upper().startswith("EHLO"):

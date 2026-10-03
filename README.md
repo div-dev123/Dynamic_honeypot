@@ -13,36 +13,77 @@ A sophisticated network deception system designed to detect, analyze, and visual
 - **ML/RL Enrichment**: Events are enriched with ML anomaly/type signals and RL response recommendations (may appear shortly after the base attack is logged)
 - **Decoy Web App + Honeytokens**: A realistic multi-step decoy app that issues trackable reset links/API keys/pixels that “phone home” when used
 
-## 🏗️ Architecture
+## 🏗️ System Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│  Network        │    │  Honeypot        │    │  Web Dashboard   │
-│  Sniffer        │───▶│  Engine          │───▶│  (Flask)         │
-│  (Scapy)        │    │  (Services)      │    │  Real-time UI    │
-└─────────────────┘    └──────────────────┘    └──────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-  Traffic Analysis        Attack Simulation        Data Visualization
-  Threat Detection        Intelligence Gathering   Live Monitoring
+┌────────────────────────────────────────────────────────┐
+│                    Attacker Probes                     │
+└───────────────┬────────────────────────┬───────────────┘
+                │                        │
+                ▼                        ▼
+┌──────────────────────────────┐  ┌──────────────────────┐
+│  Honeypot Services Engine    │  │   Network Sniffer    │
+│  (HTTP, SSH, MySQL, FTP,     │  │   (Scapy Packet      │
+│   Telnet, SMTP, Decoy WebApp)│  │    Telemetry)        │
+└───────────────┬──────────────┘  └──────────┬───────────┘
+                │                            │
+                ▼                            ▼
+    [Base SQLite Record]                     │
+                │                            │
+                ▼ (WebSocket: new_attack)    │
+     ┌────────────────────────┐              │
+     │      Web Dashboard     │              │
+     │      (Flask-SocketIO)  │              │
+     └────────────────────────┘              │
+                ▲                            │
+                │ (WebSocket: enriched)      │
+                │                            ▼
+    ┌─────────────────────────┐   ┌──────────────────────┐
+    │   In-Memory Mitigation  │◀──│   Shared EventBus    │
+    │   Policy Enforcement    │   │   (Background Queue) │
+    └─────────────────────────┘   └──────────┬───────────┘
+                                             │
+                                             ▼
+                               ┌───────────────────────────┐
+                               │  4-Layer ML / RL Pipeline │
+                               │  1. Anomaly Autoencoder   │
+                               │  2. Deep Classifier (DNN) │
+                               │  3. Specialist (RF)       │
+                               │  4. Tabular Q-Learning    │
+                               └───────────────────────────┘
 ```
+
+### 🧠 4-Layer Machine Learning & Reinforcement Learning Engine
+
+The system features an autonomous, multi-tier threat classification and adaptive deception pipeline:
+1. **Layer 1 — Anomaly & Zero-Day Detection**: Autoencoder reconstruction error ($\text{MSE}$) and Isolation Forest score identify unseen behaviors. High reconstruction loss with low classifier confidence flags potential **Zero-Day** exploits.
+2. **Layer 2 — Deep Neural Network Classifier**: 5-layer feed-forward DNN classifying attacks across standard taxonomy (`Normal`, `DoS`, `Probe`, `R2L`, `U2R`).
+3. **Layer 3 — R2L vs. U2R Specialist**: Targeted Random Forest resolving high-ambiguity boundaries between remote exploits and privilege escalations.
+4. **Layer 4 — Adaptive Deception Agent (Tabular Q-Learning)**: 54-state Q-table ($\text{attack\_type} \times \text{aggression} \times \text{time\_bucket}$) that autonomously selects deception actions (`slow_response`, `expose_fake_db`, `redirect_sandbox`, `deep_packet_log`, `fake_error`, `expose_fake_dirs`) and calculates the **Deception Effectiveness Score (DES)**.
+
+👉 **For complete mathematical specifications, dataset preprocessing, and Colab training metrics, see [ML_ARCHITECTURE.md](ML_ARCHITECTURE.md).**
+
+---
 
 ## 🛠️ Technology Stack
 
-**Backend**: Python 3.9+
-- `scapy` - Network packet analysis
-- `flask` - Web framework
-- `flask-socketio` - Real-time WebSocket communication
-- `ipinfo` - IP geolocation API
+**Backend & Deception Core**: Python 3.9+
+- `flask` & `flask-socketio` - Real-time WebSocket web dashboard
+- `scapy` - Promiscuous network packet analysis
+- `tensorflow` / `keras` - Deep Neural Network classifier & Autoencoder
+- `scikit-learn` - Specialist classifier, isolation forest, scalers
+- `ipinfo` - IP geolocation lookup
 
 **Frontend**: 
-- HTML5/CSS3 with Bootstrap 4.5
-- JavaScript with Chart.js and Leaflet.js
-- Jinja2 templating
+- HTML5 / CSS3 with Cyber-themed UI and Bootstrap 4.5
+- `Chart.js` - Real-time attack velocity & distribution charts
+- `Leaflet.js` - Live interactive global threat map
 
-**Database**: SQLite
+**Database**: SQLite (`honeypot.db`)
 
 **Containerization**: Docker
+
+---
 
 ## 🚀 Quick Start
 
@@ -60,7 +101,7 @@ cd dynamic_honeypot
 
 2. **Install dependencies**
 ```bash
-pip install flask flask-socketio scapy ipinfo
+pip install -r requirements.txt
 ```
 
 Optional (recommended): configure IP geolocation token

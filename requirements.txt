@@ -1,0 +1,14 @@
+# Web Framework & Real-Time WebSockets
+flask>=2.0.0
+flask-socketio>=5.0.0
+
+# Network Sniffing & Traffic Analysis
+scapy>=2.4.5
+
+# IP Geolocation
+ipinfo>=4.4.0
+
+# Machine Learning & Deep Learning
+numpy>=1.21.0
+scikit-learn>=1.0.0
+tensorflow>=2.8.0

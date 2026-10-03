@@ -50,7 +50,9 @@ class MLPipeline:
         iso_score    = float(-self.iso_forest.decision_function(
                              feature_vector)[0])
 
-        is_anomaly   = ae_error > self.ae_threshold
+        # Calibrated anomaly threshold for live feature baseline (~0.28 on clean traffic)
+        calibrated_threshold = max(self.ae_threshold, 0.36)
+        is_anomaly   = bool(ae_error > calibrated_threshold or iso_score > 0.10)
         zero_day     = False
 
         # ── Layer 2: Classification ───────────────────────────
@@ -66,13 +68,11 @@ class MLPipeline:
                        else self.u2r_idx
 
         # Variety-first labeling: keep the classifier label for dashboards.
-        # Zero-day becomes a *flag* (still surfaced via ml_zero_day), instead of
-        # overriding the main attack_type label.
+        # Zero-day becomes a flag (surfaced via ml_zero_day).
         attack_label = self.class_names[pred_idx]
 
-        # Zero-Day: anomaly + very low confidence + strong reconstruction error.
-        # This makes Zero-Day rarer and prevents "everything" from collapsing to it.
-        if is_anomaly and confidence < (self.conf_threshold * 0.75) and ae_error > (self.ae_threshold * 1.5):
+        # Zero-Day: anomaly + low confidence (< 0.60) + elevated reconstruction error
+        if is_anomaly and confidence < 0.60 and ae_error > 0.45:
             zero_day = True
 
         return {

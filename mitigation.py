@@ -19,7 +19,7 @@ from typing import Dict, Optional
 
 @dataclass
 class MitigationPolicy:
-    mode: str  # 'none' | 'drop' | 'tarpit' | 'fakedb' | 'deeppacketlog'
+    mode: str  # 'none' | 'drop' | 'tarpit' | 'fakedb' | 'fakedirs' | 'fake_error' | 'deeppacketlog'
     delay_seconds: float = 0.0
     expires_at: Optional[float] = None
 
@@ -47,7 +47,8 @@ def set_policy(ip: str, mode: str, *, delay_seconds: float = 0.0, ttl_seconds: O
     """Set an in-memory mitigation policy for an IP."""
     if not ip:
         raise ValueError('ip is required')
-    if mode not in {'none', 'drop', 'tarpit', 'fakedb', 'deeppacketlog'}:
+    valid_modes = {'none', 'drop', 'tarpit', 'fakedb', 'fakedirs', 'fake_error', 'deeppacketlog'}
+    if mode not in valid_modes:
         raise ValueError(f'unsupported mode: {mode}')
 
     expires_at = None
@@ -73,27 +74,32 @@ def get_policy(ip: str) -> MitigationPolicy:
 
 
 def apply_rl_action(ip: str, rl_action: str, *, ttl_seconds: Optional[float] = 900) -> MitigationPolicy:
-    """Map a textual RL action to a mitigation policy.
-
-    This intentionally uses a conservative mapping since RL actions are model-defined.
-    """
+    """Map the 6 RL deception actions directly to honeypot mitigation policies."""
     action = str(rl_action or '').lower().strip()
 
-    # Common action keywords
-    if any(k in action for k in ['block', 'drop', 'deny', 'reset']):
+    # 1. redirect_sandbox -> isolate / drop
+    if any(k in action for k in ['redirect_sandbox', 'sandbox', 'block', 'drop', 'deny', 'reset', 'isolate']):
         return set_policy(ip, 'drop', ttl_seconds=ttl_seconds)
 
-    if any(k in action for k in ['redirect', 'sandbox', 'isolate']):
-        return set_policy(ip, 'tarpit', delay_seconds=0.8, ttl_seconds=ttl_seconds)
+    # 2. slow_response -> tarpit delay
+    if any(k in action for k in ['slow_response', 'tarpit', 'slow', 'delay', 'throttle']):
+        return set_policy(ip, 'tarpit', delay_seconds=1.2, ttl_seconds=ttl_seconds)
 
-    if any(k in action for k in ['tarpit', 'slow', 'delay', 'throttle']):
-        return set_policy(ip, 'tarpit', delay_seconds=1.5, ttl_seconds=ttl_seconds)
+    # 3. expose_fake_db -> fakedb lure
+    if any(k in action for k in ['expose_fake_db', 'fakedb', 'fake_db']):
+        return set_policy(ip, 'fakedb', delay_seconds=0.3, ttl_seconds=ttl_seconds)
 
-    if 'fakedb' in action:
-        return set_policy(ip, 'fakedb', delay_seconds=0.4, ttl_seconds=ttl_seconds)
+    # 4. expose_fake_dirs -> fakedirs lure
+    if any(k in action for k in ['expose_fake_dirs', 'fakedirs', 'fake_dirs']):
+        return set_policy(ip, 'fakedirs', delay_seconds=0.2, ttl_seconds=ttl_seconds)
 
-    if any(k in action for k in ['deeppacketlog', 'deep_packet_log', 'monitor', 'trace']):
-        return set_policy(ip, 'deeppacketlog', delay_seconds=0.2, ttl_seconds=ttl_seconds)
+    # 5. fake_error -> simulate error / confusion
+    if any(k in action for k in ['fake_error', 'error']):
+        return set_policy(ip, 'fake_error', delay_seconds=0.2, ttl_seconds=ttl_seconds)
 
-    # deep_packet_log / monitor / sandbox → no active mitigation
+    # 6. deep_packet_log -> comprehensive monitoring with light delay
+    if any(k in action for k in ['deep_packet_log', 'deeppacketlog', 'monitor', 'trace']):
+        return set_policy(ip, 'deeppacketlog', delay_seconds=0.1, ttl_seconds=ttl_seconds)
+
     return set_policy(ip, 'none', ttl_seconds=ttl_seconds)
+

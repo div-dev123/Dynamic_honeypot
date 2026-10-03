@@ -33,18 +33,22 @@ class EventBus:
             # ML classification
             ml_result = self.ml.predict(features)
 
-            # Pass service context to RL
-            ml_result['service'] = event.get('service')
+            # Pass context and payload to RL
+            ml_result['service']  = event.get('service')
             ml_result['category'] = event.get('category')
+            ml_result['payload']  = event.get('payload')
 
-            # Rule-based override for known categories/services
-            override = self._override_attack_type(event)
-            if override:
-                ml_result['attack_type'] = override
+            # Hybrid defense: If ML classifier has strong confidence (>= 75%), trust its output.
+            # Only use domain fallback if ML confidence is low or if it misclassifies an explicit attack category as Normal.
+            if ml_result.get('confidence', 0) < 75.0 or (ml_result.get('attack_type') == 'Normal' and event.get('category') and 'normal' not in str(event.get('category')).lower()):
+                override = self._override_attack_type(event)
+                if override:
+                    ml_result['attack_type'] = override
 
-            # RL decision
+            # RL decision (Tabular Q-Learning)
             rl_result = self.rl.get_action(
                 event.get('src_ip', 'unknown'), ml_result)
+
 
             # Enrich event
             enriched = {

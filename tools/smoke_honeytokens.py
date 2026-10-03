@@ -71,18 +71,22 @@ def main() -> None:
     r = client.get(f"/honey/{pixel_token}.png")
     assert r.status_code == 200
 
-    # 4) Verify persistence
+    # 4) Wait briefly for EventBus background worker thread to enrich
+    import time
+    time.sleep(1.5)
+
+    # 5) Verify persistence & ML/RL enrichment
     conn = sqlite3.connect("honeypot.db")
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT id, service, category, payload FROM attacks ORDER BY id DESC LIMIT 15"
+        "SELECT id, service, category, ml_attack_type, ml_confidence, ml_is_anomaly, rl_action, rl_des, rl_q_value FROM attacks ORDER BY id DESC LIMIT 5"
     ).fetchall()
     conn.close()
 
     print("API key:", api_key)
     print("Reset token:", reset_token)
     print("Pixel token:", pixel_token)
-    print("\nLatest attacks:")
+    print("\nLatest Enriched Attacks:")
     for row in rows:
         print(dict(row))
 
